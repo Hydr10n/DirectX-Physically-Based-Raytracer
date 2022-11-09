@@ -1,0 +1,11 @@
+Model Information:
+* title:	Cyberpunk City
+* source:	https://sketchfab.com/3d-models/cyberpunk-city-930de4cb5e7d49cd83c324fa9b66b713
+* author:	muhammad.khalfan (https://sketchfab.com/muhammad.khalfan)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Cyberpunk City" (https://sketchfab.com/3d-models/cyberpunk-city-930de4cb5e7d49cd83c324fa9b66b713) by muhammad.khalfan (https://sketchfab.com/muhammad.khalfan) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

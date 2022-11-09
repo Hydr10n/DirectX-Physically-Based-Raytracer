@@ -1,0 +1,11 @@
+Model Information:
+* title:	Diorama of cyberpunk city.
+* source:	https://sketchfab.com/3d-models/diorama-of-cyberpunk-city-19032d140af645fda039f09de2d798ad
+* author:	deadpool (https://sketchfab.com/lvlup)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Diorama of cyberpunk city." (https://sketchfab.com/3d-models/diorama-of-cyberpunk-city-19032d140af645fda039f09de2d798ad) by deadpool (https://sketchfab.com/lvlup) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
