@@ -31,6 +31,9 @@ Real-time physically based rendering using GPUs capable of DirectX Raytracing.
 - V-Sync
 - Camera
 	- Vertical Field of View
+	- Depth of Field
+		- Focus Distance
+		- Aperture Radius
 - Raytracing
 	- Max Trace Recursion Depth
 	- Samples Per Pixel

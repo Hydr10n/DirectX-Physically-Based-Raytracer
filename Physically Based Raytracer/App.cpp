@@ -63,51 +63,12 @@ namespace {
 
 struct App::Impl : IDeviceNotify {
 	Impl(const shared_ptr<WindowModeHelper>& windowModeHelper) noexcept(false) : m_windowModeHelper(windowModeHelper) {
-		{
-			{
-				{
-					auto& cameraSettings = GraphicsSettings.Camera;
-					cameraSettings.VerticalFieldOfView = clamp(cameraSettings.VerticalFieldOfView, CameraMinVerticalFieldOfView, CameraMaxVerticalFieldOfView);
-				}
-
-				{
-					auto& raytracingSettings = GraphicsSettings.Raytracing;
-					raytracingSettings.MaxTraceRecursionDepth = clamp(raytracingSettings.MaxTraceRecursionDepth, 1u, RaytracingMaxTraceRecursionDepth);
-					raytracingSettings.SamplesPerPixel = clamp(raytracingSettings.SamplesPerPixel, 1u, RaytracingMaxSamplesPerPixel);
-				}
-
-				{
-					auto& postProcessingSettings = GraphicsSettings.PostProcessing;
-
-					{
-						auto& toneMappingSettings = postProcessingSettings.ToneMapping;
-						toneMappingSettings.Operator = clamp(toneMappingSettings.Operator, ToneMapPostProcess::None, static_cast<ToneMapPostProcess::Operator>(ToneMapPostProcess::Operator_Max - 1));
-						toneMappingSettings.Exposure = clamp(toneMappingSettings.Exposure, 0.0f, ToneMappingMaxExposure);
-					}
-
-					{
-						auto& bloomSettings = postProcessingSettings.Bloom;
-						bloomSettings.Threshold = clamp(bloomSettings.Threshold, 0.0f, 1.0f);
-						bloomSettings.BlurSize = clamp(bloomSettings.BlurSize, 1.0f, BloomMaxBlurSize);
-					}
-				}
-			}
-
-			{
-				auto& menuSettings = UISettings.Menu;
-				menuSettings.BackgroundOpacity = clamp(menuSettings.BackgroundOpacity, 0.0f, 1.0f);
-			}
-
-			{
-				auto& speedSettings = ControlsSettings.Camera.Speed;
-				speedSettings.Movement = clamp(speedSettings.Movement, CameraMinMovementSpeed, CameraMaxMovementSpeed);
-				speedSettings.Rotation = clamp(speedSettings.Rotation, CameraMinRotationSpeed, CameraMaxRotationSpeed);
-			}
-		}
+		CheckSettings();
 
 		{
-			m_firstPersonCamera.SetPosition(m_scene.Camera.Position);
-			m_firstPersonCamera.SetDirections(m_scene.Camera.Directions.Up, m_scene.Camera.Directions.Forward);
+			m_cameraController.SetPosition(m_scene.Camera.Position);
+			m_cameraController.SetDirections(m_scene.Camera.ForwardDirection, m_scene.Camera.UpDirection);
+			m_cameraController.SetFocusDistance(GraphicsSettings.Camera.DepthOfField.FocusDistance);
 		}
 
 		windowModeHelper->SetFullscreenResolutionHandledByWindow(false);
@@ -157,11 +118,6 @@ struct App::Impl : IDeviceNotify {
 	}
 
 	SIZE GetOutputSize() const noexcept { return m_deviceResources->GetOutputSize(); }
-
-	float GetOutputAspectRatio() const noexcept {
-		const auto [cx, cy] = GetOutputSize();
-		return static_cast<float>(cx) / static_cast<float>(cy);
-	}
 
 	void Tick() {
 		m_stepTimer.Tick([&] { Update(); });
@@ -285,7 +241,7 @@ private:
 
 	ComPtr<ID3D12PipelineState> m_pipelineState;
 
-	static constexpr float ToneMappingMaxExposure = 5;
+	static constexpr float ToneMappingMinExposure = -5, ToneMappingMaxExposure = 5;
 	map<ToneMapPostProcess::Operator, shared_ptr<ToneMapPostProcess>> m_toneMapping;
 
 	static constexpr float BloomMaxBlurSize = 4;
@@ -309,9 +265,12 @@ private:
 
 	static constexpr float
 		CameraMinVerticalFieldOfView = 30, CameraMaxVerticalFieldOfView = 120,
-		CameraMinMovementSpeed = 0.1f, CameraMaxMovementSpeed = 100, CameraMinRotationSpeed = 0.01f, CameraMaxRotationSpeed = 5;
+		CameraMinFocusDistance = 1e-1f,
+		CameraMinApertureRadius = 1, CameraMaxApertureRadius = 100,
+		CameraMinTranslationSpeed = 1e-1f, CameraMaxTranslationSpeed = 100,
+		CameraMinRotationSpeed = 1e-1f, CameraMaxRotationSpeed = 2;
 	bool m_isViewChanged = true;
-	FirstPersonCamera m_firstPersonCamera;
+	CameraController m_cameraController;
 
 	HaltonSamplePattern m_haltonSamplePattern;
 
@@ -353,8 +312,12 @@ private:
 		m_isViewChanged = true;
 
 		{
-			m_firstPersonCamera.SetLens(XMConvertToRadians(GraphicsSettings.Camera.VerticalFieldOfView), GetOutputAspectRatio());
-			m_shaderBuffers.Camera->GetData().ProjectionToWorld = XMMatrixTranspose(m_firstPersonCamera.InverseViewProjection());
+			m_cameraController.SetLens(XMConvertToRadians(GraphicsSettings.Camera.VerticalFieldOfView), static_cast<float>(outputSize.cx) / static_cast<float>(outputSize.cy));
+
+			auto& camera = m_shaderBuffers.Camera->GetData();
+			camera.RightDirection = m_cameraController.GetRightDirection();
+			camera.UpDirection = m_cameraController.GetUpDirection();
+			camera.ForwardDirection = m_cameraController.GetForwardDirection();
 		}
 
 		{
@@ -395,7 +358,7 @@ private:
 
 		ProcessInput();
 
-		m_shaderBuffers.Camera->GetData().Jitter = m_haltonSamplePattern.GetNext();
+		m_shaderBuffers.Camera->GetData().PixelJitter = m_haltonSamplePattern.GetNext();
 
 		UpdateGlobalData();
 
@@ -445,6 +408,53 @@ private:
 		m_graphicsMemory->Commit(m_deviceResources->GetCommandQueue());
 
 		PIXEndEvent();
+	}
+
+	void CheckSettings() {
+		{
+			auto& cameraSettings = GraphicsSettings.Camera;
+
+			cameraSettings.VerticalFieldOfView = clamp(cameraSettings.VerticalFieldOfView, CameraMinVerticalFieldOfView, CameraMaxVerticalFieldOfView);
+
+			{
+				auto& depthOfFieldSettings = cameraSettings.DepthOfField;
+				depthOfFieldSettings.FocusDistance = clamp(depthOfFieldSettings.FocusDistance, CameraMinFocusDistance, m_cameraController.GetFarZ());
+				depthOfFieldSettings.ApertureRadius = clamp(depthOfFieldSettings.ApertureRadius, CameraMinApertureRadius, CameraMaxApertureRadius);
+			}
+		}
+
+		{
+			auto& raytracingSettings = GraphicsSettings.Raytracing;
+			raytracingSettings.MaxTraceRecursionDepth = clamp(raytracingSettings.MaxTraceRecursionDepth, 1u, RaytracingMaxTraceRecursionDepth);
+			raytracingSettings.SamplesPerPixel = clamp(raytracingSettings.SamplesPerPixel, 1u, RaytracingMaxSamplesPerPixel);
+		}
+
+		{
+			auto& postProcessingSettings = GraphicsSettings.PostProcessing;
+
+			{
+				auto& toneMappingSettings = postProcessingSettings.ToneMapping;
+				toneMappingSettings.Operator = clamp(toneMappingSettings.Operator, ToneMapPostProcess::None, static_cast<ToneMapPostProcess::Operator>(ToneMapPostProcess::Operator_Max - 1));
+				toneMappingSettings.Exposure = clamp(toneMappingSettings.Exposure, ToneMappingMinExposure, ToneMappingMaxExposure);
+			}
+
+			{
+				auto& bloomSettings = postProcessingSettings.Bloom;
+				bloomSettings.Threshold = clamp(bloomSettings.Threshold, 0.0f, 1.0f);
+				bloomSettings.BlurSize = clamp(bloomSettings.BlurSize, 1.0f, BloomMaxBlurSize);
+			}
+		}
+
+		{
+			auto& menuSettings = UISettings.Menu;
+			menuSettings.BackgroundOpacity = clamp(menuSettings.BackgroundOpacity, 0.0f, 1.0f);
+		}
+
+		{
+			auto& speedSettings = ControlsSettings.Camera.Speed;
+			speedSettings.Translation = clamp(speedSettings.Translation, CameraMinTranslationSpeed, CameraMaxTranslationSpeed);
+			speedSettings.Rotation = clamp(speedSettings.Rotation, CameraMinRotationSpeed, CameraMaxRotationSpeed);
+		}
 	}
 
 	void LoadScene() {
@@ -639,7 +649,16 @@ private:
 				);
 			}
 
-			CreateBuffer(m_shaderBuffers.Camera, Camera{ .Position = m_firstPersonCamera.GetPosition() }, ResourceDescriptorHeapIndex::Camera);
+			CreateBuffer(
+				m_shaderBuffers.Camera,
+				Camera{
+					.Position = m_cameraController.GetPosition(),
+					.ApertureRadius = GraphicsSettings.Camera.DepthOfField.IsEnabled ? GraphicsSettings.Camera.DepthOfField.ApertureRadius * 1e-3f : 0,
+					.NearZ = m_cameraController.GetNearZ(),
+					.FarZ = m_cameraController.GetFarZ()
+				},
+				ResourceDescriptorHeapIndex::Camera
+			);
 
 			CreateBuffer(
 				m_shaderBuffers.GlobalData,
@@ -740,49 +759,39 @@ private:
 	void UpdateCamera(const GamePad::State& gamepadState, const Keyboard::State& keyboardState, const Mouse::State& mouseState) {
 		const auto elapsedSeconds = static_cast<float>(m_stepTimer.GetElapsedSeconds());
 
-		const auto& rightDirection = m_firstPersonCamera.GetRightDirection(), & upDirection = m_firstPersonCamera.GetUpDirection(), & forwardDirection = m_firstPersonCamera.GetForwardDirection();
-
 		const auto Translate = [&](const XMFLOAT3& displacement) {
 			if (displacement.x == 0 && displacement.y == 0 && displacement.z == 0) return;
 
 			m_isViewChanged = true;
 
-			m_firstPersonCamera.Translate(rightDirection * displacement.x + upDirection * displacement.y + forwardDirection * displacement.z);
+			m_cameraController.Translate(m_cameraController.GetNormalizedRightDirection() * displacement.x + m_cameraController.GetNormalizedUpDirection() * displacement.y + m_cameraController.GetNormalizedForwardDirection() * displacement.z);
 		};
 
-		const auto Yaw = [&](float angle) {
-			if (angle == 0) return;
+		const auto Rotate = [&](float yaw, float pitch) {
+			if (yaw == 0 && pitch == 0) return;
 
 			m_isViewChanged = true;
 
-			m_firstPersonCamera.Yaw(angle);
+			if (const auto angle = asin(m_cameraController.GetNormalizedForwardDirection().y);
+				angle - pitch > XM_PIDIV2) pitch = -max(0.0f, XM_PIDIV2 - angle - 0.1f);
+			else if (angle - pitch < -XM_PIDIV2) pitch = -min(0.0f, XM_PIDIV2 + angle + 0.1f);
+
+			m_cameraController.Rotate(yaw, pitch);
 		};
 
-		const auto Pitch = [&](float angle) {
-			if (angle == 0) return;
-
-			m_isViewChanged = true;
-
-			if (const auto pitch = asin(forwardDirection.y);
-				pitch - angle > XM_PIDIV2) angle = -max(0.0f, XM_PIDIV2 - pitch - 0.1f);
-			else if (pitch - angle < -XM_PIDIV2) angle = -min(0.0f, XM_PIDIV2 + pitch + 0.1f);
-			m_firstPersonCamera.Pitch(angle);
-		};
-
-		const auto& speed = ControlsSettings.Camera.Speed;
+		const auto& speedSettings = ControlsSettings.Camera.Speed;
 
 		if (gamepadState.IsConnected()) {
-			const auto translationSpeed = elapsedSeconds * 10 * speed.Movement * (gamepadState.IsLeftTriggerPressed() ? 0.5f : 1) * (gamepadState.IsRightTriggerPressed() ? 2.0f : 1);
+			const auto translationSpeed = elapsedSeconds * speedSettings.Translation * (gamepadState.IsLeftTriggerPressed() ? 0.5f : 1.0f) * (gamepadState.IsRightTriggerPressed() ? 2.0f : 1.0f);
 			const XMFLOAT3 displacement{ gamepadState.thumbSticks.leftX * translationSpeed, 0, gamepadState.thumbSticks.leftY * translationSpeed };
 			Translate(displacement);
 
-			const auto rotationSpeed = elapsedSeconds * XM_2PI * 0.4f * speed.Rotation;
-			Yaw(gamepadState.thumbSticks.rightX * rotationSpeed);
-			Pitch(gamepadState.thumbSticks.rightY * rotationSpeed);
+			const auto rotationSpeed = elapsedSeconds * XM_2PI * speedSettings.Rotation;
+			Rotate(gamepadState.thumbSticks.rightX * rotationSpeed, gamepadState.thumbSticks.rightY * rotationSpeed);
 		}
 
 		if (mouseState.positionMode == Mouse::MODE_RELATIVE) {
-			const auto translationSpeed = elapsedSeconds * 10 * speed.Movement * (keyboardState.LeftControl ? 0.5f : 1) * (keyboardState.LeftShift ? 2.0f : 1);
+			const auto translationSpeed = elapsedSeconds * speedSettings.Translation * (keyboardState.LeftControl ? 0.5f : 1.0f) * (keyboardState.LeftShift ? 2.0f : 1.0f);
 			XMFLOAT3 displacement{};
 			if (keyboardState.A) displacement.x -= translationSpeed;
 			if (keyboardState.D) displacement.x += translationSpeed;
@@ -790,15 +799,16 @@ private:
 			if (keyboardState.S) displacement.z -= translationSpeed;
 			Translate(displacement);
 
-			const auto rotationSpeed = elapsedSeconds * 20 * speed.Rotation;
-			Yaw(XMConvertToRadians(static_cast<float>(mouseState.x)) * rotationSpeed);
-			Pitch(XMConvertToRadians(static_cast<float>(mouseState.y)) * rotationSpeed);
+			const auto rotationSpeed = elapsedSeconds * XM_2PI * 8 * speedSettings.Rotation;
+			Rotate(XMConvertToRadians(static_cast<float>(mouseState.x)) * rotationSpeed, XMConvertToRadians(static_cast<float>(mouseState.y)) * rotationSpeed);
 		}
 
 		if (m_isViewChanged) {
 			auto& camera = m_shaderBuffers.Camera->GetData();
-			camera.Position = m_firstPersonCamera.GetPosition();
-			camera.ProjectionToWorld = XMMatrixTranspose(m_firstPersonCamera.InverseViewProjection());
+			camera.Position = m_cameraController.GetPosition();
+			camera.RightDirection = m_cameraController.GetRightDirection();
+			camera.UpDirection = m_cameraController.GetUpDirection();
+			camera.ForwardDirection = m_cameraController.GetForwardDirection();
 		}
 	}
 
@@ -973,13 +983,53 @@ private:
 					if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
 						auto& cameraSettings = GraphicsSettings.Camera;
 
-						if (ImGui::SliderFloat("Vertical Field of View", &cameraSettings.VerticalFieldOfView, CameraMinVerticalFieldOfView, CameraMaxVerticalFieldOfView, "%.1f", ImGuiSliderFlags_NoInput)) {
-							m_firstPersonCamera.SetLens(XMConvertToRadians(cameraSettings.VerticalFieldOfView), GetOutputAspectRatio());
-							m_shaderBuffers.Camera->GetData().ProjectionToWorld = XMMatrixTranspose(m_firstPersonCamera.InverseViewProjection());
+						auto& camera = m_shaderBuffers.Camera->GetData();
 
-							m_shaderBuffers.GlobalData->GetData().AccumulatedFrameIndex = 0;
+						auto& accumulatedFrameIndex = m_shaderBuffers.GlobalData->GetData().AccumulatedFrameIndex;
 
-							isChanged = true;
+						auto isLensChanged = false;
+
+						if (ImGui::SliderFloat("Vertical Field of View", &cameraSettings.VerticalFieldOfView, CameraMinVerticalFieldOfView, CameraMaxVerticalFieldOfView, "%.1f", ImGuiSliderFlags_AlwaysClamp)) {
+							m_cameraController.SetLens(XMConvertToRadians(cameraSettings.VerticalFieldOfView), static_cast<float>(outputSize.cx) / static_cast<float>(outputSize.cy));
+
+							accumulatedFrameIndex = 0;
+
+							isLensChanged = isChanged = true;
+						}
+
+						if (ImGui::TreeNodeEx("Depth of View", ImGuiTreeNodeFlags_DefaultOpen)) {
+							auto& depthOfFieldSettings = cameraSettings.DepthOfField;
+
+							auto isDepthOfFieldChanged = ImGui::Checkbox("Enable", &depthOfFieldSettings.IsEnabled);
+
+							if (depthOfFieldSettings.IsEnabled) {
+								if (auto focusDistance = m_cameraController.GetFocusDistance(); ImGui::DragFloat("Focus Distance", &focusDistance, 0.1f, CameraMinFocusDistance, m_cameraController.GetFarZ(), "%.1f", ImGuiSliderFlags_AlwaysClamp)) {
+									m_cameraController.SetFocusDistance(focusDistance);
+
+									depthOfFieldSettings.FocusDistance = focusDistance;
+
+									camera.ForwardDirection = m_cameraController.GetForwardDirection();
+
+									isLensChanged = isDepthOfFieldChanged = true;
+								}
+
+								isDepthOfFieldChanged |= ImGui::SliderFloat("Aperture Radius", &depthOfFieldSettings.ApertureRadius, CameraMinApertureRadius, CameraMaxApertureRadius, "%.1f", ImGuiSliderFlags_AlwaysClamp);
+							}
+
+							if (isDepthOfFieldChanged) {
+								camera.ApertureRadius = depthOfFieldSettings.IsEnabled ? depthOfFieldSettings.ApertureRadius * 1e-3f : 0;
+
+								accumulatedFrameIndex = 0;
+
+								isChanged = true;
+							}
+
+							ImGui::TreePop();
+						}
+
+						if (isLensChanged) {
+							camera.RightDirection = m_cameraController.GetRightDirection();
+							camera.UpDirection = m_cameraController.GetUpDirection();
 						}
 
 						ImGui::TreePop();
@@ -990,14 +1040,14 @@ private:
 
 						auto& globalData = m_shaderBuffers.GlobalData->GetData();
 
-						if (ImGui::SliderInt("Max Trace Recursion Depth", reinterpret_cast<int*>(&raytracingSettings.MaxTraceRecursionDepth), 1, RaytracingMaxTraceRecursionDepth, "%d", ImGuiSliderFlags_NoInput)) {
+						if (ImGui::SliderInt("Max Trace Recursion Depth", reinterpret_cast<int*>(&raytracingSettings.MaxTraceRecursionDepth), 1, RaytracingMaxTraceRecursionDepth, "%d", ImGuiSliderFlags_AlwaysClamp)) {
 							globalData.RaytracingMaxTraceRecursionDepth = raytracingSettings.MaxTraceRecursionDepth;
 							globalData.AccumulatedFrameIndex = 0;
 
 							isChanged = true;
 						}
 
-						if (ImGui::SliderInt("Samples Per Pixel", reinterpret_cast<int*>(&raytracingSettings.SamplesPerPixel), 1, static_cast<int>(RaytracingMaxSamplesPerPixel), "%d", ImGuiSliderFlags_NoInput)) {
+						if (ImGui::SliderInt("Samples Per Pixel", reinterpret_cast<int*>(&raytracingSettings.SamplesPerPixel), 1, static_cast<int>(RaytracingMaxSamplesPerPixel), "%d", ImGuiSliderFlags_AlwaysClamp)) {
 							globalData.RaytracingSamplesPerPixel = raytracingSettings.SamplesPerPixel;
 							globalData.AccumulatedFrameIndex = 0;
 
@@ -1017,8 +1067,8 @@ private:
 								isChanged |= isOperatorChanged = ImGui::Combo("Operator", reinterpret_cast<int*>(&toneMappingSettings.Operator), operators.begin(), static_cast<int>(size(operators)));
 							}
 
-							bool isExposureChanged;
-							isChanged |= isExposureChanged = toneMappingSettings.Operator == ToneMapPostProcess::None ? false : ImGui::SliderFloat("Exposure", &toneMappingSettings.Exposure, 0, ToneMappingMaxExposure, "%.2f", ImGuiSliderFlags_NoInput);
+							const auto isExposureChanged = toneMappingSettings.Operator == ToneMapPostProcess::None ? false : ImGui::SliderFloat("Exposure", &toneMappingSettings.Exposure, ToneMappingMinExposure, ToneMappingMaxExposure, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+							isChanged |= isExposureChanged;
 
 							if (isOperatorChanged || isExposureChanged) m_toneMapping[toneMappingSettings.Operator]->SetExposure(toneMappingSettings.Exposure);
 
@@ -1031,9 +1081,9 @@ private:
 							isChanged |= ImGui::Checkbox("Enable", &bloomSettings.IsEnabled);
 
 							if (bloomSettings.IsEnabled) {
-								isChanged |= ImGui::SliderFloat("Threshold", &bloomSettings.Threshold, 0, 1, "%.2f", ImGuiSliderFlags_NoInput);
+								isChanged |= ImGui::SliderFloat("Threshold", &bloomSettings.Threshold, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
 
-								isChanged |= ImGui::SliderFloat("Blur size", &bloomSettings.BlurSize, 1, BloomMaxBlurSize, "%.2f", ImGuiSliderFlags_NoInput);
+								isChanged |= ImGui::SliderFloat("Blur size", &bloomSettings.BlurSize, 1, BloomMaxBlurSize, "%.2f", ImGuiSliderFlags_AlwaysClamp);
 							}
 
 							ImGui::TreePop();
@@ -1055,7 +1105,7 @@ private:
 
 						isChanged |= ImGui::Checkbox("Open on Startup", &menuSettings.IsOpenOnStartup);
 
-						isChanged |= ImGui::SliderFloat("Background Opacity", &menuSettings.BackgroundOpacity, 0, 1, "%.2f", ImGuiSliderFlags_NoInput);
+						isChanged |= ImGui::SliderFloat("Background Opacity", &menuSettings.BackgroundOpacity, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
 
 						ImGui::TreePop();
 					}
@@ -1077,9 +1127,9 @@ private:
 							if (ImGui::TreeNodeEx("Speed", ImGuiTreeNodeFlags_DefaultOpen)) {
 								auto& speedSettings = cameraSettings.Speed;
 
-								isChanged |= ImGui::SliderFloat("Movement", &speedSettings.Movement, CameraMinMovementSpeed, CameraMaxMovementSpeed, "%.1f", ImGuiSliderFlags_NoInput);
+								isChanged |= ImGui::SliderFloat("Translation", &speedSettings.Translation, CameraMinTranslationSpeed, CameraMaxTranslationSpeed, "%.1f", ImGuiSliderFlags_AlwaysClamp);
 
-								isChanged |= ImGui::SliderFloat("Rotation", &speedSettings.Rotation, CameraMinRotationSpeed, CameraMaxRotationSpeed, "%.2f", ImGuiSliderFlags_NoInput);
+								isChanged |= ImGui::SliderFloat("Rotation", &speedSettings.Rotation, CameraMinRotationSpeed, CameraMaxRotationSpeed, "%.2f", ImGuiSliderFlags_AlwaysClamp);
 
 								ImGui::TreePop();
 							}
@@ -1178,8 +1228,6 @@ App::App(const shared_ptr<WindowModeHelper>& windowModeHelper) : m_impl(make_uni
 App::~App() = default;
 
 SIZE App::GetOutputSize() const noexcept { return m_impl->GetOutputSize(); }
-
-float App::GetOutputAspectRatio() const noexcept { return m_impl->GetOutputAspectRatio(); }
 
 void App::Tick() { m_impl->Tick(); }
 

@@ -16,10 +16,7 @@ export struct MyScene : Scene {
 	MyScene() {
 		Camera = {
 			.Position{ -5.948547f, 5.7683268f, -27.316963f },
-			.Directions{
-				.Up{ 0.11510569f, 0.95278513f, 0.28098264f },
-				.Forward{ 0.36118266f, -0.30364546f, 0.88167256f }
-			}
+			.ForwardDirection{ 0.36118266f, -0.30364546f, 0.88167256f }
 		};
 
 		BuildModels();

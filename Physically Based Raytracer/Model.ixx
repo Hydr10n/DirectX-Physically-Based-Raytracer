@@ -82,7 +82,7 @@ export {
 			if (scene == nullptr || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || scene->mRootNode == nullptr) throw runtime_error(format("Assimp: {}", importer.GetErrorString()));
 
 			aiVector3D minAABB(FLT_MAX), maxAABB(-FLT_MAX);
-			for (auto i : views::iota(0u, scene->mNumMeshes)) {
+			for (const auto i : views::iota(0u, scene->mNumMeshes)) {
 				const auto& AABB = scene->mMeshes[i]->mAABB;
 				minAABB.x = min(minAABB.x, AABB.mMin.x);
 				minAABB.y = min(minAABB.y, AABB.mMin.y);
@@ -112,7 +112,7 @@ export {
 		void ProcessMesh(const aiScene& scene, const aiMesh& mesh, const path& directoryPath, TextureCollection& loadedTextures, ID3D12Device5* pDevice, ResourceUploadBatch& resourceUploadBatch, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorHeapIndex) {
 			const aiMatrix3x3 transform3x3(scene.mRootNode->mTransformation);
 			vector<ModelMesh::VertexType> vertices;
-			for (auto i : views::iota(0u, mesh.mNumVertices)) {
+			for (const auto i : views::iota(0u, mesh.mNumVertices)) {
 				ModelMesh::VertexType vertex;
 				auto v = scene.mRootNode->mTransformation * mesh.mVertices[i];
 				vertex.position = { v.x, v.y, v.z };
@@ -130,7 +130,7 @@ export {
 			if (vertices.size() < 3) return;
 
 			vector<UINT32> indices;
-			for (auto i : views::iota(0u, mesh.mNumFaces)) for (auto j : views::iota(0u, mesh.mFaces[i].mNumIndices)) indices.emplace_back(mesh.mFaces[i].mIndices[j]);
+			for (const auto i : views::iota(0u, mesh.mNumFaces)) for (const auto j : views::iota(0u, mesh.mFaces[i].mNumIndices)) indices.emplace_back(mesh.mFaces[i].mIndices[j]);
 			if (indices.size() < 3) return;
 
 			const auto modelMesh = make_shared<ModelMesh>(pDevice, vertices, indices);
@@ -221,8 +221,10 @@ export {
 
 		void ProcessNode(const aiScene& scene, const aiNode& node, const path& directoryPath, TextureCollection& loadedTextures, ID3D12Device5* pDevice, ResourceUploadBatch& resourceUploadBatch, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorHeapIndex) {
 			const auto ProcessNode = [&](this auto& self, const aiNode& node) -> void {
-				for (unsigned int i = 0; i < node.mNumMeshes; i++) ProcessMesh(scene, *scene.mMeshes[node.mMeshes[i]], directoryPath, loadedTextures, pDevice, resourceUploadBatch, descriptorHeap, descriptorHeapIndex);
-				for (unsigned int i = 0; i < node.mNumChildren; i++) self(*node.mChildren[i]);
+				for (const auto i : views::iota(0u, node.mNumMeshes)) {
+					ProcessMesh(scene, *scene.mMeshes[node.mMeshes[i]], directoryPath, loadedTextures, pDevice, resourceUploadBatch, descriptorHeap, descriptorHeapIndex);
+				}
+				for (const auto i : views::iota(0u, node.mNumChildren)) self(*node.mChildren[i]);
 			};
 			ProcessNode(node);
 		}
@@ -244,7 +246,7 @@ export {
 
 			mutex mutex;
 			vector<unique_ptr<binary_semaphore>> semaphores;
-			for (auto i : views::iota(0u, threadCount)) semaphores.emplace_back(make_unique<binary_semaphore>(0));
+			for (const auto i : views::iota(0u, threadCount)) semaphores.emplace_back(make_unique<binary_semaphore>(0));
 
 			for (auto& model : *this | views::values) {
 				threads.emplace_back(

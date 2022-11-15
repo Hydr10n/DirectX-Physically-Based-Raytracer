@@ -26,10 +26,7 @@ export {
 	struct Scene {
 		virtual ~Scene() = default;
 
-		struct {
-			XMFLOAT3 Position;
-			struct { XMFLOAT3 Up{ 0, 1, 0 }, Forward{ 0, 0, 1 }; } Directions;
-		} Camera;
+		struct { XMFLOAT3 Position, UpDirection{ 0, 1, 0 }, ForwardDirection{ 0, 0, 1 }; } Camera;
 
 		ModelDictionary Models;
 
