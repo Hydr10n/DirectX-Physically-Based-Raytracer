@@ -97,7 +97,7 @@ export {
 
 		vector<shared_ptr<MeshNode>> MeshNodes;
 
-		BoneInfoDictionary BoneInfos;
+		BoneInfoDictionary BoneInfo;
 
 		shared_ptr<UploadBuffer<XMFLOAT3X4>> SkeletalTransforms;
 
@@ -134,12 +134,12 @@ export {
 							const auto newMesh = make_shared<Mesh>();
 
 							{
-								const auto CopyBuffer = [&]<typename T>(shared_ptr<T>&destination, const shared_ptr<T>&source, UINT & srvDescriptorHeapIndex, bool isVertex, bool copy) {
+								const auto CopyBuffer = [&]<typename T>(shared_ptr<T>&destination, const shared_ptr<T>&source, UINT & SRVDescriptorHeapIndex, bool isVertex, bool copy) {
 									destination = make_shared<T>(*source, copy ? commandList.GetNative() : nullptr);
 									descriptorHeapIndex = descriptorHeap.Allocate(1, descriptorHeapIndex);
-									srvDescriptorHeapIndex = descriptorHeapIndex - 1;
-									if (isVertex) destination->CreateRawSRV(descriptorHeap.GetCpuHandle(srvDescriptorHeapIndex));
-									else destination->CreateStructuredSRV(descriptorHeap.GetCpuHandle(srvDescriptorHeapIndex));
+									SRVDescriptorHeapIndex = descriptorHeapIndex - 1;
+									if (isVertex) destination->CreateRawSRV(descriptorHeap.GetCpuHandle(SRVDescriptorHeapIndex));
+									else destination->CreateStructuredSRV(descriptorHeap.GetCpuHandle(SRVDescriptorHeapIndex));
 								};
 								CopyBuffer(newMesh->Vertices, mesh->Vertices, newMesh->DescriptorHeapIndices.Vertices, true, true);
 								CopyBuffer(newMesh->MotionVectors, mesh->MotionVectors, newMesh->DescriptorHeapIndices.MotionVectors, false, false);
@@ -172,7 +172,7 @@ export {
 			SkeletalTransforms = make_shared<UploadBuffer<XMFLOAT3X4>>(*source.SkeletalTransforms);
 
 			Name = source.Name;
-			BoneInfos = source.BoneInfos;
+			BoneInfo = source.BoneInfo;
 			BoundingBox = source.BoundingBox;
 			Materials = source.Materials;
 			Textures = source.Textures;
@@ -233,7 +233,7 @@ export {
 			};
 			ProcessNode(*scene->mRootNode);
 
-			if (const auto count = size(BoneInfos)) SkeletalTransforms = make_shared<UploadBuffer<XMFLOAT3X4>>(pDevice, count);
+			if (const auto count = size(BoneInfo)) SkeletalTransforms = make_shared<UploadBuffer<XMFLOAT3X4>>(pDevice, count);
 
 			BoundingBox = ToBoundingBox(modelAABB);
 		}
@@ -282,13 +282,13 @@ export {
 			_mesh->Name = mesh.mName.C_Str();
 
 			{
-				const auto CreateBuffer = [&]<typename T>(shared_ptr<T>&buffer, const auto & data, D3D12_RESOURCE_STATES afterState, UINT * pSrvDescriptorHeapIndex, bool isVertex) {
+				const auto CreateBuffer = [&]<typename T>(shared_ptr<T>&buffer, const auto & data, D3D12_RESOURCE_STATES afterState, UINT * pSRVDescriptorHeapIndex, bool isVertex) {
 					buffer = make_shared<T>(pDevice, resourceUploadBatch, data, afterState);
-					if (pSrvDescriptorHeapIndex != nullptr) {
+					if (pSRVDescriptorHeapIndex != nullptr) {
 						descriptorHeapIndex = descriptorHeap.Allocate(1, descriptorHeapIndex);
-						*pSrvDescriptorHeapIndex = descriptorHeapIndex - 1;
-						if (isVertex) buffer->CreateRawSRV(descriptorHeap.GetCpuHandle(*pSrvDescriptorHeapIndex));
-						else buffer->CreateStructuredSRV(descriptorHeap.GetCpuHandle(*pSrvDescriptorHeapIndex));
+						*pSRVDescriptorHeapIndex = descriptorHeapIndex - 1;
+						if (isVertex) buffer->CreateRawSRV(descriptorHeap.GetCpuHandle(*pSRVDescriptorHeapIndex));
+						else buffer->CreateStructuredSRV(descriptorHeap.GetCpuHandle(*pSRVDescriptorHeapIndex));
 					}
 				};
 
@@ -396,15 +396,15 @@ export {
 
 				UINT boneID;
 				const auto boneName = bone.mName.C_Str();
-				if (const auto pBoneInfo = BoneInfos.find(boneName); pBoneInfo == cend(BoneInfos)) {
-					const BoneInfo boneInfo{
-						.ID = static_cast<UINT>(size(BoneInfos)),
+				if (const auto pBoneInfo = BoneInfo.find(boneName); pBoneInfo == cend(BoneInfo)) {
+					const ::BoneInfo boneInfo{
+						.ID = static_cast<UINT>(size(BoneInfo)),
 						.Transform = reinterpret_cast<const Matrix&>(bone.mOffsetMatrix).Transpose()
 					};
-					BoneInfos[boneName] = boneInfo;
+					BoneInfo[boneName] = boneInfo;
 					boneID = boneInfo.ID;
 				}
-				else boneID = BoneInfos.at(boneName).ID;
+				else boneID = BoneInfo.at(boneName).ID;
 
 				for (const auto i : views::iota(0u, bone.mNumWeights)) {
 					const auto& weight = bone.mWeights[i];

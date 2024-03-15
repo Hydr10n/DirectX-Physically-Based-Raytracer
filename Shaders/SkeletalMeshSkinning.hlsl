@@ -2,8 +2,7 @@
 
 #include "Math.hlsli"
 
-struct Constants { uint VertexCount; };
-ConstantBuffer<Constants> g_constants : register(b0);
+cbuffer _ : register(b0) { uint g_vertexCount; }
 
 StructuredBuffer<VertexPositionNormalTangentBones> g_skeletalVertices : register(t0);
 
@@ -22,7 +21,7 @@ RWStructuredBuffer<float3> g_motionVectors : register(u1);
 )]
 [numthreads(256, 1, 1)]
 void main(uint vertexID : SV_DispatchThreadID) {
-	if (vertexID >= g_constants.VertexCount) return;
+	if (vertexID >= g_vertexCount) return;
 
 	float boneWeightSum = 0;
 	float3x4 transform = 0;

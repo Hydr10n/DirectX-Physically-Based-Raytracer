@@ -149,11 +149,11 @@ export {
 			ReadNode(*scene.mRootNode, m_rootTransformNode);
 		}
 
-		void Bind(const BoneInfoDictionary& boneInfos) {
+		void Bind(const BoneInfoDictionary& boneInfo) {
 			bool isSkeletalRootFound = false;
-			const auto StoreBoneInfos = [&](this auto& self, TransformNode& transformNode, const Matrix& parentTransform) -> void {
+			const auto StoreBoneInfo = [&](this auto& self, TransformNode& transformNode, const Matrix& parentTransform) -> void {
 				const auto transform = transformNode.Transform * parentTransform;
-				if (const auto pBoneInfo = boneInfos.find(transformNode.Name); pBoneInfo != cend(boneInfos)) {
+				if (const auto pBoneInfo = boneInfo.find(transformNode.Name); pBoneInfo != cend(boneInfo)) {
 					transformNode.BoneInfo = pBoneInfo->second;
 
 					if (!isSkeletalRootFound) {
@@ -163,9 +163,9 @@ export {
 				}
 				for (auto& child : transformNode.Children) self(child, transform);
 			};
-			StoreBoneInfos(m_rootTransformNode, {});
+			StoreBoneInfo(m_rootTransformNode, {});
 
-			m_skeletalTransforms.resize(size(boneInfos));
+			m_skeletalTransforms.resize(size(boneInfo));
 		}
 
 		friend struct AnimationCollection;
@@ -189,18 +189,18 @@ export {
 			for (const auto i : views::iota(0u, scene->mNumAnimations)) emplace_back(Animation()).Load(*scene, *scene->mAnimations[i]);
 		}
 
-		auto HasBoneInfos() const { return m_hasBoneInfos; }
-		void SetBoneInfos(const BoneInfoDictionary& boneInfos) {
-			m_hasBoneInfos = !::empty(boneInfos);
+		auto HasBoneInfo() const { return m_hasBoneInfo; }
+		void SetBoneInfo(const BoneInfoDictionary& boneInfo) {
+			m_hasBoneInfo = !::empty(boneInfo);
 
-			for (auto& animation : *this) animation.Bind(boneInfos);
+			for (auto& animation : *this) animation.Bind(boneInfo);
 		}
 
 		auto GetSelectedIndex() const { return min(m_selectedIndex, size() - 1); }
 		void SetSelectedIndex(size_t index) { m_selectedIndex = min(index, size() - 1); }
 
 	private:
-		bool m_hasBoneInfos{};
+		bool m_hasBoneInfo{};
 
 		size_t m_selectedIndex{};
 	};

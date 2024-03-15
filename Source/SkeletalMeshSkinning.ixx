@@ -30,11 +30,12 @@ export struct SkeletalMeshSkinning {
 		constexpr D3D12_SHADER_BYTECODE ShaderByteCode{ g_SkeletalMeshSkinning_dxil, size(g_SkeletalMeshSkinning_dxil) };
 		ThrowIfFailed(pDevice->CreateRootSignature(0, ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&m_rootSignature)));
 		const D3D12_COMPUTE_PIPELINE_STATE_DESC computePipelineStateDesc{ .pRootSignature = m_rootSignature.Get(), .CS = ShaderByteCode };
-		ThrowIfFailed(pDevice->CreateComputePipelineState(&computePipelineStateDesc, IID_PPV_ARGS(&m_pipelineStateObject)));
+		ThrowIfFailed(pDevice->CreateComputePipelineState(&computePipelineStateDesc, IID_PPV_ARGS(&m_pipelineState)));
+		m_pipelineState->SetName(L"SkeletalMeshSkinning");
 	}
 
 	void Prepare(ID3D12GraphicsCommandList* pCommandList) {
-		pCommandList->SetPipelineState(m_pipelineStateObject.Get());
+		pCommandList->SetPipelineState(m_pipelineState.Get());
 		pCommandList->SetComputeRootSignature(m_rootSignature.Get());
 	}
 
@@ -52,5 +53,5 @@ export struct SkeletalMeshSkinning {
 
 private:
 	ComPtr<ID3D12RootSignature> m_rootSignature;
-	ComPtr<ID3D12PipelineState> m_pipelineStateObject;
+	ComPtr<ID3D12PipelineState> m_pipelineState;
 };

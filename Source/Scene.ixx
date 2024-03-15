@@ -135,7 +135,7 @@ export {
 
 					if (!empty(renderObjectDesc.AnimationURI)) {
 						renderObject.AnimationCollection = *AnimationCollections.at(renderObjectDesc.AnimationURI);
-						renderObject.AnimationCollection.SetBoneInfos(renderObject.Model.BoneInfos);
+						renderObject.AnimationCollection.SetBoneInfo(renderObject.Model.BoneInfo);
 					}
 
 					RenderObjects.emplace_back(renderObject);
@@ -194,7 +194,7 @@ export {
 				if (!renderObject.IsVisible) continue;
 
 				const auto& model = renderObject.Model;
-				if (const auto& animationCollection = renderObject.AnimationCollection; !empty(animationCollection) && animationCollection.HasBoneInfos()) {
+				if (const auto& animationCollection = renderObject.AnimationCollection; !empty(animationCollection) && animationCollection.HasBoneInfo()) {
 					if (const auto& skeletalTransforms = animationCollection[animationCollection.GetSelectedIndex()].GetSkeletalTransforms(); !empty(skeletalTransforms)) {
 						model.SkeletalTransforms->Upload(skeletalTransforms);
 					}
@@ -250,7 +250,7 @@ export {
 					const auto& model = renderObject.Model;
 
 					const auto& animationCollection = renderObject.AnimationCollection;
-					const auto isAnimated = updateOnly && !empty(animationCollection) && animationCollection.HasBoneInfos();
+					const auto isAnimated = updateOnly && !empty(animationCollection) && animationCollection.HasBoneInfo();
 
 					for (const auto& meshNode : model.MeshNodes) {
 						auto isSkeletal = false;

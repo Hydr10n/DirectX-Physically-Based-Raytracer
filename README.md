@@ -44,8 +44,7 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 		- Sharpness
 	- Chromatic Aberration
 	- Bloom
-		- Threshold
-		- Blur Size
+		- Strength
 	- Tone Mapping
 		- Operator: Saturate | Reinhard | ACES Filmic
 		- Exposure
