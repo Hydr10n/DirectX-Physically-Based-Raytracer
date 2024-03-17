@@ -21,6 +21,7 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 ### Graphics Settings
 - Window Mode: Windowed | Borderless | Fullscreen
 - Resolution
+- HDR
 - V-Sync
 - NVIDIA Reflex
 - Camera
@@ -46,8 +47,12 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 	- Bloom
 		- Strength
 	- Tone Mapping
-		- Operator: Saturate | Reinhard | ACES Filmic
-		- Exposure
+		- HDR
+			- Paper White Nits
+			- Color Rotation: Rec.709 to Rec.2020 | DCI-P3-D65 to Rec.2020 | Rec.709 to DCI-P3-D65
+		- Non-HDR
+			- Operator: Saturate | Reinhard | ACES Filmic
+			- Exposure
 
 ### Supported Input Devices
 - Xbox Controller
