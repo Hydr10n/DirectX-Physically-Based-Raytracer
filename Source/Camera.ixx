@@ -13,14 +13,12 @@ using namespace std;
 export {
 	struct Camera {
 		BOOL IsNormalizedDepthReversed;
-		XMFLOAT3 Position;
-		XMFLOAT3 RightDirection;
+		XMFLOAT3 Position, RightDirection;
 		float _;
 		XMFLOAT3 UpDirection;
 		float _1;
 		XMFLOAT3 ForwardDirection;
-		float ApertureRadius;
-		float NearDepth, FarDepth;
+		float ApertureRadius, NearDepth, FarDepth;
 		XMFLOAT2 Jitter;
 		XMFLOAT4X4 PreviousWorldToView, PreviousViewToProjection, PreviousWorldToProjection, PreviousProjectionToView, PreviousViewToWorld, WorldToProjection;
 	};

@@ -853,17 +853,17 @@ private:
 				const auto desc = pResource->GetDesc();
 				return desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D && desc.DepthOrArraySize == 6;
 			};
-			if (m_scene->EnvironmentLightTexture.SRVDescriptorHeapIndex != ~0u) {
+			if (m_scene->EnvironmentLightTexture.SRVDescriptor.HeapIndex != ~0u) {
 				sceneData.IsEnvironmentLightTextureCubeMap = IsCubeMap(m_scene->EnvironmentLightTexture.Resource.Get());
 				XMStoreFloat3x4(&sceneData.EnvironmentLightTextureTransform, m_scene->EnvironmentLightTexture.Transform());
 			}
-			if (m_scene->EnvironmentTexture.SRVDescriptorHeapIndex != ~0u) {
+			if (m_scene->EnvironmentTexture.SRVDescriptor.HeapIndex != ~0u) {
 				sceneData.IsEnvironmentTextureCubeMap = IsCubeMap(m_scene->EnvironmentTexture.Resource.Get());
 				XMStoreFloat3x4(&sceneData.EnvironmentTextureTransform, m_scene->EnvironmentTexture.Transform());
 			}
 			sceneData.ResourceDescriptorHeapIndices = {
-				.InEnvironmentLightTexture = m_scene->EnvironmentLightTexture.SRVDescriptorHeapIndex,
-				.InEnvironmentTexture = m_scene->EnvironmentTexture.SRVDescriptorHeapIndex
+				.InEnvironmentLightTexture = m_scene->EnvironmentLightTexture.SRVDescriptor.HeapIndex,
+				.InEnvironmentTexture = m_scene->EnvironmentTexture.SRVDescriptor.HeapIndex
 			};
 
 			sceneData.EnvironmentLightColor = m_scene->EnvironmentLightColor;
@@ -890,15 +890,15 @@ private:
 					auto& resourceDescriptorHeapIndices = objectData.ResourceDescriptorHeapIndices;
 					resourceDescriptorHeapIndices = {
 						.Mesh{
-							.Vertices = mesh->DescriptorHeapIndices.Vertices,
-							.Indices = mesh->DescriptorHeapIndices.Indices,
-							.MotionVectors = mesh->DescriptorHeapIndices.MotionVectors
+							.Vertices = mesh->Vertices->GetRawSRVDescriptor().HeapIndex,
+							.Indices = mesh->Indices->GetStructuredSRVDescriptor().HeapIndex,
+							.MotionVectors = mesh->MotionVectors ? mesh->MotionVectors->GetStructuredSRVDescriptor().HeapIndex : ~0u
 						}
 					};
 
 					if (mesh->MaterialIndex != ~0u) {
 						for (const auto& [TextureType, Texture] : renderObject.Model.Textures[mesh->MaterialIndex]) {
-							const auto index = Texture.SRVDescriptorHeapIndex;
+							const auto index = Texture.SRVDescriptor.HeapIndex;
 							switch (auto& indices = resourceDescriptorHeapIndices.Textures; TextureType) {
 								case TextureType::BaseColorMap: indices.BaseColorMap = index; break;
 								case TextureType::EmissiveColorMap: indices.EmissiveColorMap = index; break;
@@ -928,7 +928,7 @@ private:
 		m_raytracing->SetConstants({
 			.RenderSize = m_renderSize,
 			.FrameIndex = m_stepTimer.GetFrameCount() - 1,
-			.MaxNumberOfBounces = raytracingSettings.MaxNumberOfBounces,
+			.Bounces = raytracingSettings.Bounces,
 			.SamplesPerPixel = raytracingSettings.SamplesPerPixel,
 			.IsRussianRouletteEnabled = raytracingSettings.IsRussianRouletteEnabled,
 			.RTXDI{
@@ -958,11 +958,8 @@ private:
 			.InObjectData = m_GPUBuffers.ObjectData.get(),
 			.InLightInfo = m_RTXDIResources.LightInfo.get(),
 			.InLightIndices = m_RTXDIResources.LightIndices.get(),
+			.InNeighborOffsets = m_RTXDIResources.NeighborOffsets.get(),
 			.OutDIReservoir = m_RTXDIResources.DIReservoir.get()
-		};
-
-		m_raytracing->GPUDescriptorHandles = {
-			.InNeighborOffsets = m_resourceDescriptorHeap->GetGpuHandle(ResourceDescriptorHeapIndex::InNeighborOffsets)
 		};
 
 		m_raytracing->RenderTextures = {
@@ -1115,7 +1112,7 @@ private:
 			resourceUploadBatch.Begin();
 
 			m_RTXDIResources.ReSTIRDIContext = make_unique<ReSTIRDIContext>(ReSTIRDIStaticParameters{ .RenderWidth = m_renderSize.x, .RenderHeight = m_renderSize.y });
-			m_RTXDIResources.CreateNeighborOffsets(device, resourceUploadBatch, m_resourceDescriptorHeap->GetCpuHandle(ResourceDescriptorHeapIndex::InNeighborOffsets));
+			m_RTXDIResources.CreateNeighborOffsets(device, resourceUploadBatch, *m_resourceDescriptorHeap, ResourceDescriptorHeapIndex::InNeighborOffsets);
 			m_RTXDIResources.CreateDIReservoir(device);
 
 			resourceUploadBatch.End(m_deviceResources->GetCommandQueue()).get();
@@ -1597,15 +1594,15 @@ private:
 
 					isChanged |= ImGui::Checkbox("Russian Roulette", &raytracingSettings.IsRussianRouletteEnabled);
 
-					isChanged |= ImGui::SliderInt("Max Number of Bounces", reinterpret_cast<int*>(&raytracingSettings.MaxNumberOfBounces), 0, raytracingSettings.MaxMaxNumberOfBounces, "%d", ImGuiSliderFlags_AlwaysClamp);
+					isChanged |= ImGui::SliderInt("Bounces", reinterpret_cast<int*>(&raytracingSettings.Bounces), 0, raytracingSettings.MaxBounces, "%d", ImGuiSliderFlags_AlwaysClamp);
 
 					isChanged |= ImGui::SliderInt("Samples per Pixel", reinterpret_cast<int*>(&raytracingSettings.SamplesPerPixel), 1, raytracingSettings.MaxSamplesPerPixel, "%d", ImGuiSliderFlags_AlwaysClamp);
 
-					if (ImGui::TreeNodeEx("NVIDIA RTX Direct Illumination", ImGuiTreeNodeFlags_DefaultOpen)) {
+					if (ImGui::TreeNodeEx("NVIDIA RTX Dynamic Illumination", ImGuiTreeNodeFlags_DefaultOpen)) {
 						auto& RTXDISettings = raytracingSettings.RTXDI;
 
 						{
-							const ImGuiEx::ScopedID scopedID("Enable NVIDIA RTX Direct Illumination");
+							const ImGuiEx::ScopedID scopedID("Enable NVIDIA RTX Dynamic Illumination");
 
 							isChanged |= ImGui::Checkbox("Enable", &RTXDISettings.IsEnabled);
 						}
@@ -1660,7 +1657,7 @@ private:
 					if (ImGui::TreeNodeEx("Super Resolution", ImGuiTreeNodeFlags_DefaultOpen)) {
 						auto& superResolutionSettings = postProcessingSetttings.SuperResolution;
 
-						bool isChanged = false;
+						auto isChanged = false;
 
 						if (ImGui::BeginCombo("Upscaler", ToString(superResolutionSettings.Upscaler))) {
 							for (const auto Upscaler : { Upscaler::None, Upscaler::DLSS, Upscaler::FSR }) {

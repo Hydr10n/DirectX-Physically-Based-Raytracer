@@ -60,8 +60,6 @@ export {
 		shared_ptr<DefaultBuffer<SkeletalVertexType>> SkeletalVertices;
 		shared_ptr<DefaultBuffer<XMFLOAT3>> MotionVectors;
 
-		struct { UINT Vertices = ~0u, Indices = ~0u, MotionVectors = ~0u; } DescriptorHeapIndices;
-
 		bool HasTangents{};
 
 		BoundingBox BoundingBox{ {}, {} };
@@ -134,21 +132,19 @@ export {
 							const auto newMesh = make_shared<Mesh>();
 
 							{
-								const auto CopyBuffer = [&]<typename T>(shared_ptr<T>&destination, const shared_ptr<T>&source, UINT & SRVDescriptorHeapIndex, bool isVertex, bool copy) {
-									destination = make_shared<T>(*source, copy ? commandList.GetNative() : nullptr);
+								const auto CopyBuffer = [&]<typename T>(shared_ptr<T>&destination, const shared_ptr<T>&source, bool isVertex) {
+									destination = make_shared<T>(*source, isVertex ? commandList.GetNative() : nullptr);
 									descriptorHeapIndex = descriptorHeap.Allocate(1, descriptorHeapIndex);
-									SRVDescriptorHeapIndex = descriptorHeapIndex - 1;
-									if (isVertex) destination->CreateRawSRV(descriptorHeap.GetCpuHandle(SRVDescriptorHeapIndex));
-									else destination->CreateStructuredSRV(descriptorHeap.GetCpuHandle(SRVDescriptorHeapIndex));
+									if (isVertex) destination->CreateRawSRV(descriptorHeap, descriptorHeapIndex - 1);
+									else destination->CreateStructuredSRV(descriptorHeap, descriptorHeapIndex - 1);
 								};
-								CopyBuffer(newMesh->Vertices, mesh->Vertices, newMesh->DescriptorHeapIndices.Vertices, true, true);
-								CopyBuffer(newMesh->MotionVectors, mesh->MotionVectors, newMesh->DescriptorHeapIndices.MotionVectors, false, false);
+								CopyBuffer(newMesh->Vertices, mesh->Vertices, true);
+								CopyBuffer(newMesh->MotionVectors, mesh->MotionVectors, false);
 							}
 
 							newMesh->Name = mesh->Name;
 							newMesh->Indices = mesh->Indices;
 							newMesh->SkeletalVertices = mesh->SkeletalVertices;
-							newMesh->DescriptorHeapIndices.Indices = mesh->DescriptorHeapIndices.Indices;
 							newMesh->HasTangents = mesh->HasTangents;
 							newMesh->BoundingBox = mesh->BoundingBox;
 							newMesh->MaterialIndex = mesh->MaterialIndex;
@@ -282,22 +278,21 @@ export {
 			_mesh->Name = mesh.mName.C_Str();
 
 			{
-				const auto CreateBuffer = [&]<typename T>(shared_ptr<T>&buffer, const auto & data, D3D12_RESOURCE_STATES afterState, UINT * pSRVDescriptorHeapIndex, bool isVertex) {
+				const auto CreateBuffer = [&]<typename T>(shared_ptr<T>&buffer, const auto & data, D3D12_RESOURCE_STATES afterState, bool isStructuredSRV = true, bool hasSRV = true) {
 					buffer = make_shared<T>(pDevice, resourceUploadBatch, data, afterState);
-					if (pSRVDescriptorHeapIndex != nullptr) {
+					if (hasSRV) {
 						descriptorHeapIndex = descriptorHeap.Allocate(1, descriptorHeapIndex);
-						*pSRVDescriptorHeapIndex = descriptorHeapIndex - 1;
-						if (isVertex) buffer->CreateRawSRV(descriptorHeap.GetCpuHandle(*pSRVDescriptorHeapIndex));
-						else buffer->CreateStructuredSRV(descriptorHeap.GetCpuHandle(*pSRVDescriptorHeapIndex));
+						if (isStructuredSRV) buffer->CreateStructuredSRV(descriptorHeap, descriptorHeapIndex - 1);
+						else buffer->CreateRawSRV(descriptorHeap, descriptorHeapIndex - 1);
 					}
 				};
 
-				CreateBuffer(_mesh->Vertices, vertices, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &_mesh->DescriptorHeapIndices.Vertices, true);
-				CreateBuffer(_mesh->Indices, indices, D3D12_RESOURCE_STATE_INDEX_BUFFER, &_mesh->DescriptorHeapIndices.Indices, false);
+				CreateBuffer(_mesh->Vertices, vertices, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, false);
+				CreateBuffer(_mesh->Indices, indices, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 
 				if (mesh.HasBones()) {
-					CreateBuffer(_mesh->SkeletalVertices, GetBones(vertices, mesh), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, nullptr, false);
-					CreateBuffer(_mesh->MotionVectors, vector<XMFLOAT3>(size(vertices)), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &_mesh->DescriptorHeapIndices.MotionVectors, true);
+					CreateBuffer(_mesh->SkeletalVertices, GetBones(vertices, mesh), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, false, false);
+					CreateBuffer(_mesh->MotionVectors, vector<XMFLOAT3>(size(vertices)), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 				}
 			}
 
