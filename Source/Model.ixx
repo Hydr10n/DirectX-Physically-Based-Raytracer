@@ -22,7 +22,7 @@ import Event;
 import GPUBuffer;
 import Material;
 import ResourceHelpers;
-import Texture;
+import TextureHelpers;
 import Vertex;
 
 using namespace Assimp;
@@ -33,6 +33,7 @@ using namespace Microsoft::WRL;
 using namespace ResourceHelpers;
 using namespace std;
 using namespace std::filesystem;
+using namespace TextureHelpers;
 
 namespace {
 	constexpr auto ToBoundingBox(const aiAABB& AABB) {
@@ -102,11 +103,11 @@ export {
 		BoundingBox BoundingBox{ {}, {} };
 
 		vector<Material> Materials;
-		vector<map<TextureType, Texture>> Textures;
+		vector<map<TextureMap, shared_ptr<Texture>>> Textures;
 
 		Model() = default;
 
-		Model(const Model& source, ID3D12Device* pDevice, ID3D12CommandQueue* pCommandQueue, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorHeapIndex) {
+		Model(const Model& source, ID3D12Device* pDevice, ID3D12CommandQueue* pCommandQueue, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) {
 			if (!source.SkeletalTransforms) {
 				*this = source;
 
@@ -134,9 +135,9 @@ export {
 							{
 								const auto CopyBuffer = [&]<typename T>(shared_ptr<T>&destination, const shared_ptr<T>&source, bool isVertex) {
 									destination = make_shared<T>(*source, isVertex ? commandList.GetNative() : nullptr);
-									descriptorHeapIndex = descriptorHeap.Allocate(1, descriptorHeapIndex);
-									if (isVertex) destination->CreateRawSRV(descriptorHeap, descriptorHeapIndex - 1);
-									else destination->CreateStructuredSRV(descriptorHeap, descriptorHeapIndex - 1);
+									descriptorIndex = descriptorHeap.Allocate(1, descriptorIndex);
+									if (isVertex) destination->CreateRawSRV(descriptorHeap, descriptorIndex - 1);
+									else destination->CreateStructuredSRV(descriptorHeap, descriptorIndex - 1);
 								};
 								CopyBuffer(newMesh->Vertices, mesh->Vertices, true);
 								CopyBuffer(newMesh->MotionVectors, mesh->MotionVectors, false);
@@ -174,7 +175,7 @@ export {
 			Textures = source.Textures;
 		}
 
-		void Load(const path& filePath, ID3D12Device* pDevice, ResourceUploadBatch& resourceUploadBatch, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorHeapIndex) {
+		void Load(const path& filePath, ID3D12Device* pDevice, ResourceUploadBatch& resourceUploadBatch, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) {
 			if (empty(filePath)) throw invalid_argument("Model file path cannot be empty");
 
 			Importer importer;
@@ -211,7 +212,7 @@ export {
 					meshNode->Meshes.reserve(node.mNumMeshes);
 					for (const auto i : views::iota(0u, node.mNumMeshes)) {
 						auto& mesh = *scene->mMeshes[node.mMeshes[i]];
-						if (const auto _mesh = ProcessMesh(filePath, *scene, node.mTransformation, mesh, loadedTextures, pDevice, resourceUploadBatch, descriptorHeap, descriptorHeapIndex)) {
+						if (const auto _mesh = ProcessMesh(filePath, *scene, node.mTransformation, mesh, loadedTextures, pDevice, resourceUploadBatch, descriptorHeap, descriptorIndex)) {
 							meshNode->Meshes.emplace_back(_mesh);
 
 							CalculateAABB(mesh.mAABB, meshAABB);
@@ -238,12 +239,12 @@ export {
 		struct LoadedTexture {
 			bool IsEmbedded;
 			path FilePath;
-			Texture Resource;
+			shared_ptr<Texture> Resource;
 
-			bool IsSameAs(const path& filePath, bool isEmbedded) const { return IsEmbedded == isEmbedded && (IsEmbedded ? FilePath == filePath : AreSamePath(FilePath, filePath)); }
+			bool IsSameAs(bool isEmbedded, const path& filePath) const { return IsEmbedded == isEmbedded && (IsEmbedded ? FilePath == filePath : AreSamePath(FilePath, filePath)); }
 		};
 
-		shared_ptr<Mesh> ProcessMesh(const path& modelFilePath, const aiScene& scene, const aiMatrix4x4& transform, aiMesh& mesh, vector<LoadedTexture>& loadedTextures, ID3D12Device* pDevice, ResourceUploadBatch& resourceUploadBatch, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorHeapIndex) {
+		shared_ptr<Mesh> ProcessMesh(const path& modelFilePath, const aiScene& scene, const aiMatrix4x4& transform, aiMesh& mesh, vector<LoadedTexture>& loadedTextures, ID3D12Device* pDevice, ResourceUploadBatch& resourceUploadBatch, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) {
 			if (mesh.mNumVertices < 3) return nullptr;
 			vector<Mesh::VertexType> vertices;
 			vertices.reserve(mesh.mNumVertices);
@@ -281,9 +282,9 @@ export {
 				const auto CreateBuffer = [&]<typename T>(shared_ptr<T>&buffer, const auto & data, D3D12_RESOURCE_STATES afterState, bool isStructuredSRV = true, bool hasSRV = true) {
 					buffer = make_shared<T>(pDevice, resourceUploadBatch, data, afterState);
 					if (hasSRV) {
-						descriptorHeapIndex = descriptorHeap.Allocate(1, descriptorHeapIndex);
-						if (isStructuredSRV) buffer->CreateStructuredSRV(descriptorHeap, descriptorHeapIndex - 1);
-						else buffer->CreateRawSRV(descriptorHeap, descriptorHeapIndex - 1);
+						descriptorIndex = descriptorHeap.Allocate(1, descriptorIndex);
+						if (isStructuredSRV) buffer->CreateStructuredSRV(descriptorHeap, descriptorIndex - 1);
+						else buffer->CreateRawSRV(descriptorHeap, descriptorIndex - 1);
 					}
 				};
 
@@ -325,46 +326,46 @@ export {
 
 				auto& textures = Textures.emplace_back();
 				for (const auto textureType : {
-					TextureType::BaseColorMap,
-					TextureType::EmissiveColorMap,
-					TextureType::MetallicMap,
-					TextureType::RoughnessMap,
-					TextureType::AmbientOcclusionMap,
-					TextureType::TransmissionMap,
-					TextureType::OpacityMap,
-					TextureType::NormalMap
+					TextureMap::BaseColor,
+					TextureMap::EmissiveColor,
+					TextureMap::Metallic,
+					TextureMap::Roughness,
+					TextureMap::AmbientOcclusion,
+					TextureMap::Transmission,
+					TextureMap::Opacity,
+					TextureMap::Normal
 					}) {
 					aiTextureType type;
 					switch (textureType) {
-						case TextureType::BaseColorMap: type = aiTextureType_BASE_COLOR; break;
-						case TextureType::EmissiveColorMap: type = aiTextureType_EMISSION_COLOR; break;
-						case TextureType::MetallicMap: type = aiTextureType_METALNESS; break;
-						case TextureType::RoughnessMap: type = aiTextureType_DIFFUSE_ROUGHNESS; break;
-						case TextureType::AmbientOcclusionMap: type = aiTextureType_AMBIENT_OCCLUSION; break;
-						case TextureType::TransmissionMap: type = aiTextureType_TRANSMISSION; break;
-						case TextureType::OpacityMap: type = aiTextureType_OPACITY; break;
-						case TextureType::NormalMap: type = aiTextureType_NORMALS; break;
+						case TextureMap::BaseColor: type = aiTextureType_BASE_COLOR; break;
+						case TextureMap::EmissiveColor: type = aiTextureType_EMISSION_COLOR; break;
+						case TextureMap::Metallic: type = aiTextureType_METALNESS; break;
+						case TextureMap::Roughness: type = aiTextureType_DIFFUSE_ROUGHNESS; break;
+						case TextureMap::AmbientOcclusion: type = aiTextureType_AMBIENT_OCCLUSION; break;
+						case TextureMap::Transmission: type = aiTextureType_TRANSMISSION; break;
+						case TextureMap::Opacity: type = aiTextureType_OPACITY; break;
+						case TextureMap::Normal: type = aiTextureType_NORMALS; break;
 						default: throw;
 					}
 					if (aiString filePath;
 						material.GetTexture(type, 0, &filePath) == AI_SUCCESS
-						|| (textureType == TextureType::BaseColorMap && material.GetTexture(aiTextureType_DIFFUSE, 0, &filePath) == AI_SUCCESS)
-						|| (textureType == TextureType::EmissiveColorMap && material.GetTexture(aiTextureType_EMISSIVE, 0, &filePath) == AI_SUCCESS)
-						|| (textureType == TextureType::NormalMap
+						|| (textureType == TextureMap::BaseColor && material.GetTexture(aiTextureType_DIFFUSE, 0, &filePath) == AI_SUCCESS)
+						|| (textureType == TextureMap::EmissiveColor && material.GetTexture(aiTextureType_EMISSIVE, 0, &filePath) == AI_SUCCESS)
+						|| (textureType == TextureMap::Normal
 							&& (material.GetTexture(aiTextureType_HEIGHT, 0, &filePath) == AI_SUCCESS || material.GetTexture(aiTextureType_NORMAL_CAMERA, 0, &filePath) == AI_SUCCESS))) {
 						path textureFilePath = reinterpret_cast<const char8_t*>(filePath.C_Str());
 						const auto embeddedTexture = scene.GetEmbeddedTexture(filePath.C_Str());
 						const auto isEmbedded = embeddedTexture != nullptr;
 						if (!isEmbedded) textureFilePath = path(modelFilePath).replace_filename(textureFilePath);
 						auto& texture = textures[textureType];
-						if (const auto pLoadedTexture = ranges::find_if(loadedTextures, [&](const auto& value) { return value.IsSameAs(textureFilePath, isEmbedded); });
+						if (const auto pLoadedTexture = ranges::find_if(loadedTextures, [&](const auto& value) { return value.IsSameAs(isEmbedded, textureFilePath); });
 							pLoadedTexture == cend(loadedTextures)) {
-							texture.Name = material.GetName().C_Str();
-
 							if (isEmbedded) {
-								texture.Load(embeddedTexture->achFormatHint, embeddedTexture->pcData, embeddedTexture->mHeight ? embeddedTexture->mWidth * embeddedTexture->mHeight * 4 : embeddedTexture->mWidth, pDevice, resourceUploadBatch, descriptorHeap, descriptorHeapIndex);
+								texture = LoadTexture(embeddedTexture->achFormatHint, embeddedTexture->pcData, embeddedTexture->mHeight ? embeddedTexture->mWidth * embeddedTexture->mHeight * 4 : embeddedTexture->mWidth, pDevice, resourceUploadBatch, descriptorHeap, descriptorIndex);
 							}
-							else texture.Load(textureFilePath, pDevice, resourceUploadBatch, descriptorHeap, descriptorHeapIndex);
+							else {
+								texture = LoadTexture(textureFilePath, pDevice, resourceUploadBatch, descriptorHeap, descriptorIndex);
+							}
 
 							loadedTextures.emplace_back(isEmbedded, textureFilePath, texture);
 						}
@@ -419,11 +420,11 @@ export {
 }
 
 struct ModelDictionaryLoader {
-	void operator()(Model& resource, const path& filePath, ID3D12Device* pDevice, ID3D12CommandQueue* pCommandQueue, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorHeapIndex) const {
+	void operator()(Model& resource, const path& filePath, ID3D12Device* pDevice, ID3D12CommandQueue* pCommandQueue, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) const {
 		ResourceUploadBatch resourceUploadBatch(pDevice);
 		resourceUploadBatch.Begin();
 
-		resource.Load(filePath, pDevice, resourceUploadBatch, descriptorHeap, descriptorHeapIndex);
+		resource.Load(filePath, pDevice, resourceUploadBatch, descriptorHeap, descriptorIndex);
 
 		resourceUploadBatch.End(pCommandQueue).get();
 	}

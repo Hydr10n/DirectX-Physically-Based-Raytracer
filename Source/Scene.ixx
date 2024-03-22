@@ -21,7 +21,7 @@ import Model;
 import RaytracingHelpers;
 import ResourceHelpers;
 import SkeletalMeshSkinning;
-import Texture;
+import TextureHelpers;
 
 using namespace DirectX;
 using namespace DirectX::RaytracingHelpers;
@@ -31,6 +31,7 @@ using namespace ResourceHelpers;
 using namespace rtxmu;
 using namespace std;
 using namespace std::filesystem;
+using namespace TextureHelpers;
 
 export {
 	struct RenderObjectBase {
@@ -81,7 +82,10 @@ export {
 			XMFLOAT3X4 PreviousObjectToWorld, ObjectToWorld;
 		};
 
-		struct : Texture { Transform Transform; } EnvironmentLightTexture, EnvironmentTexture;
+		struct {
+			shared_ptr<Texture> Texture;
+			Transform Transform;
+		} EnvironmentLightTexture, EnvironmentTexture;
 
 		ModelDictionary Models;
 
@@ -95,7 +99,7 @@ export {
 
 		virtual void Tick(double elapsedSeconds, const GamePad::ButtonStateTracker& gamepadStateTracker, const Keyboard::KeyboardStateTracker& keyboardStateTracker, const Mouse::ButtonStateTracker& mouseStateTracker) {}
 
-		void Load(const SceneDesc& sceneDesc, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorHeapIndex) {
+		void Load(const SceneDesc& sceneDesc, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) {
 			reinterpret_cast<SceneBase&>(*this) = sceneDesc;
 
 			{
@@ -103,12 +107,11 @@ export {
 				resourceUploadBatch.Begin();
 
 				if (!empty(sceneDesc.EnvironmentLightTexture.FilePath)) {
-					EnvironmentLightTexture.Load(ResolveResourcePath(sceneDesc.EnvironmentLightTexture.FilePath), m_device, resourceUploadBatch, descriptorHeap, descriptorHeapIndex);
+					EnvironmentLightTexture.Texture = LoadTexture(ResolveResourcePath(sceneDesc.EnvironmentLightTexture.FilePath), m_device, resourceUploadBatch, descriptorHeap, descriptorIndex);
 					EnvironmentLightTexture.Transform = sceneDesc.EnvironmentLightTexture.Transform;
 				}
-
 				if (!empty(sceneDesc.EnvironmentTexture.FilePath)) {
-					EnvironmentTexture.Load(ResolveResourcePath(sceneDesc.EnvironmentTexture.FilePath), m_device, resourceUploadBatch, descriptorHeap, descriptorHeapIndex);
+					EnvironmentTexture.Texture = LoadTexture(ResolveResourcePath(sceneDesc.EnvironmentTexture.FilePath), m_device, resourceUploadBatch, descriptorHeap, descriptorIndex);
 					EnvironmentTexture.Transform = sceneDesc.EnvironmentTexture.Transform;
 				}
 
@@ -123,7 +126,7 @@ export {
 					if (!empty(renderObject.AnimationURI)) animationDescs.try_emplace(renderObject.AnimationURI, sceneDesc.Animations.at(renderObject.AnimationURI));
 				}
 
-				Models.Load(modelDescs, true, 8, m_device, m_commandQueue, descriptorHeap, descriptorHeapIndex);
+				Models.Load(modelDescs, true, 8, m_device, m_commandQueue, descriptorHeap, descriptorIndex);
 
 				AnimationCollections.Load(animationDescs, true, 8);
 
@@ -131,7 +134,9 @@ export {
 					RenderObject renderObject;
 					reinterpret_cast<RenderObjectBase&>(renderObject) = renderObjectDesc;
 
-					if (!empty(renderObjectDesc.ModelURI)) renderObject.Model = Model(*Models.at(renderObjectDesc.ModelURI), m_device, m_commandQueue, descriptorHeap, descriptorHeapIndex);
+					if (!empty(renderObjectDesc.ModelURI)) {
+						renderObject.Model = Model(*Models.at(renderObjectDesc.ModelURI), m_device, m_commandQueue, descriptorHeap, descriptorIndex);
+					}
 
 					if (!empty(renderObjectDesc.AnimationURI)) {
 						renderObject.AnimationCollection = *AnimationCollections.at(renderObjectDesc.AnimationURI);

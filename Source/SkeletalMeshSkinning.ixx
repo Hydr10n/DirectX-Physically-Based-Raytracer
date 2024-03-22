@@ -42,12 +42,12 @@ export struct SkeletalMeshSkinning {
 	void Process(ID3D12GraphicsCommandList* pCommandList) {
 		const auto vertexCount = static_cast<UINT>(GPUBuffers.OutVertices->GetCount());
 		pCommandList->SetComputeRoot32BitConstant(0, vertexCount, 0);
-		pCommandList->SetComputeRootShaderResourceView(1, GPUBuffers.InSkeletalVertices->GetResource()->GetGPUVirtualAddress());
-		pCommandList->SetComputeRootShaderResourceView(2, GPUBuffers.InSkeletalTransforms->GetResource()->GetGPUVirtualAddress());
-		pCommandList->SetComputeRootUnorderedAccessView(3, GPUBuffers.OutVertices->GetResource()->GetGPUVirtualAddress());
-		pCommandList->SetComputeRootUnorderedAccessView(4, GPUBuffers.OutMotionVectors->GetResource()->GetGPUVirtualAddress());
+		pCommandList->SetComputeRootShaderResourceView(1, GPUBuffers.InSkeletalVertices->GetNative()->GetGPUVirtualAddress());
+		pCommandList->SetComputeRootShaderResourceView(2, GPUBuffers.InSkeletalTransforms->GetNative()->GetGPUVirtualAddress());
+		pCommandList->SetComputeRootUnorderedAccessView(3, GPUBuffers.OutVertices->GetNative()->GetGPUVirtualAddress());
+		pCommandList->SetComputeRootUnorderedAccessView(4, GPUBuffers.OutMotionVectors->GetNative()->GetGPUVirtualAddress());
 		pCommandList->Dispatch((vertexCount + 255) / 256, 1, 1);
-		const auto barriers = { CD3DX12_RESOURCE_BARRIER::UAV(GPUBuffers.OutVertices->GetResource()), CD3DX12_RESOURCE_BARRIER::UAV(GPUBuffers.OutMotionVectors->GetResource()) };
+		const auto barriers = { CD3DX12_RESOURCE_BARRIER::UAV(*GPUBuffers.OutVertices), CD3DX12_RESOURCE_BARRIER::UAV(*GPUBuffers.OutMotionVectors) };
 		return pCommandList->ResourceBarrier(static_cast<UINT>(size(barriers)), data(barriers));
 	}
 

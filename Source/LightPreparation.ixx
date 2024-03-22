@@ -28,7 +28,7 @@ using namespace std;
 namespace {
 	auto IsEmissive(const Model& model, UINT materialIndex) {
 		constexpr auto Max = [](const XMFLOAT3& value) { return max({ value.x, value.y, value.z }); };
-		return materialIndex != ~0u && (Max(model.Materials[materialIndex].EmissiveColor) > 0 || model.Textures[materialIndex].contains(TextureType::EmissiveColorMap));
+		return materialIndex != ~0u && (Max(model.Materials[materialIndex].EmissiveColor) > 0 || model.Textures[materialIndex].contains(TextureMap::EmissiveColor));
 	}
 }
 
@@ -111,10 +111,10 @@ export struct LightPreparation {
 		pCommandList->SetPipelineState(m_pipelineState.Get());
 		pCommandList->SetComputeRootSignature(m_rootSignature.Get());
 		pCommandList->SetComputeRoot32BitConstant(0, m_emissiveMeshCount, 0);
-		pCommandList->SetComputeRootShaderResourceView(1, m_GPUBuffers.Tasks->GetResource()->GetGPUVirtualAddress());
-		pCommandList->SetComputeRootShaderResourceView(2, GPUBuffers.InInstanceData->GetResource()->GetGPUVirtualAddress());
-		pCommandList->SetComputeRootShaderResourceView(3, GPUBuffers.InObjectData->GetResource()->GetGPUVirtualAddress());
-		pCommandList->SetComputeRootUnorderedAccessView(4, GPUBuffers.OutLightInfo->GetResource()->GetGPUVirtualAddress());
+		pCommandList->SetComputeRootShaderResourceView(1, m_GPUBuffers.Tasks->GetNative()->GetGPUVirtualAddress());
+		pCommandList->SetComputeRootShaderResourceView(2, GPUBuffers.InInstanceData->GetNative()->GetGPUVirtualAddress());
+		pCommandList->SetComputeRootShaderResourceView(3, GPUBuffers.InObjectData->GetNative()->GetGPUVirtualAddress());
+		pCommandList->SetComputeRootUnorderedAccessView(4, GPUBuffers.OutLightInfo->GetNative()->GetGPUVirtualAddress());
 		pCommandList->Dispatch((m_emissiveTriangleCount + 255) / 256, 1, 1);
 	}
 

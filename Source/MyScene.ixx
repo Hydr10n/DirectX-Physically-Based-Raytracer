@@ -13,10 +13,11 @@ module;
 
 export module MyScene;
 
+export import Scene;
+
 import ErrorHelpers;
 import JsonConverters;
 import ResourceHelpers;
-import Scene;
 
 using namespace DirectX;
 using namespace ErrorHelpers;
