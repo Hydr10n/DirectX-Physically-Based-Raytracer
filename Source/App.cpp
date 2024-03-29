@@ -16,6 +16,8 @@ module;
 #include "directxtk12/SimpleMath.h"
 #include "directxtk12/SpriteBatch.h"
 
+#include "D3D12MemAlloc.h"
+
 #include "rtxdi/ReSTIRDI.h"
 
 #include "sl_helpers.h"
@@ -40,6 +42,7 @@ import DescriptorHeap;
 import DeviceResources;
 import ErrorHelpers;
 import GPUBuffer;
+import GPUMemoryAllocator;
 import HaltonSamplePattern;
 import LightPreparation;
 import Material;
@@ -57,6 +60,7 @@ import StringConverters;
 import Texture;
 import ThreadHelpers;
 
+using namespace D3D12MA;
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
 using namespace DX;
@@ -228,6 +232,7 @@ struct App::Impl : IDeviceNotify {
 		m_renderDescriptorHeap.reset();
 		m_resourceDescriptorHeap.reset();
 
+		m_GPUMemoryAllocator.reset();
 		m_graphicsMemory.reset();
 	}
 
@@ -247,6 +252,7 @@ private:
 	StepTimer m_stepTimer;
 
 	unique_ptr<GraphicsMemory> m_graphicsMemory;
+	unique_ptr<GPUMemoryAllocator> m_GPUMemoryAllocator;
 
 	const struct {
 		unique_ptr<GamePad> Gamepad = make_unique<::GamePad>();
@@ -389,6 +395,8 @@ private:
 		const auto device = m_deviceResources->GetDevice();
 
 		m_graphicsMemory = make_unique<GraphicsMemory>(device);
+
+		m_GPUMemoryAllocator = make_unique<GPUMemoryAllocator>(ALLOCATOR_DESC{ .pDevice = device, .pAdapter = m_deviceResources->GetAdapter() });
 
 		CreateDescriptorHeaps();
 
