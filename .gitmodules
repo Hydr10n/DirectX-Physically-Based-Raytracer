@@ -26,3 +26,6 @@
 [submodule "External/ImGuiFileDialog"]
 	path = External/ImGuiFileDialog
 	url = https://github.com/aiekick/ImGuiFileDialog
+[submodule "External/AMD/MemoryAllocator/D3D12"]
+	path = External/AMD/MemoryAllocator/D3D12
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator
