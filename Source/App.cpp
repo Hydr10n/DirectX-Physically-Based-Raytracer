@@ -146,13 +146,9 @@ struct App::Impl : IDeviceNotify {
 	void Tick() {
 		ignore = m_streamline->NewFrame();
 
-		if (const auto pFuture = m_futures.find(FutureNames::Scene); pFuture != cend(m_futures)) {
-			if (pFuture->second.wait_for(0s) == future_status::ready) {
-				m_futures.erase(pFuture);
-
-				if (m_scene && m_DLSSGOptions.mode == DLSSGMode::eOff && IsDLSSFrameGenerationEnabled()) SetFrameGenerationOptions();
-			}
-			else if (m_DLSSGOptions.mode != DLSSGMode::eOff) SetFrameGenerationOptions(false);
+		if (const auto pFuture = m_futures.find(FutureNames::Scene);
+			pFuture != cend(m_futures) && pFuture->second.wait_for(0s) == future_status::ready) {
+			m_futures.erase(pFuture);
 		}
 
 		m_stepTimer.Tick([&] { Update(); });
@@ -179,7 +175,9 @@ struct App::Impl : IDeviceNotify {
 		}
 	}
 
-	void OnWindowSizeChanged() { if (m_deviceResources->ResizeWindow(m_windowModeHelper.GetResolution())) CreateWindowSizeDependentResources(); }
+	void OnWindowSizeChanged() {
+		if (m_deviceResources->ResizeWindow(m_windowModeHelper.GetResolution())) CreateWindowSizeDependentResources();
+	}
 
 	void OnDisplayChanged() { m_deviceResources->UpdateColorSpace(); }
 
@@ -477,9 +475,9 @@ private:
 	}
 
 	void Update() {
-		const auto isReflexAvailable = m_streamline->IsFeatureAvailable(kFeatureReflex);
+		const auto isPCLAvailable = m_streamline->IsFeatureAvailable(kFeaturePCL);
 
-		if (isReflexAvailable) ignore = m_streamline->SetReflexMarker(ReflexMarker::eSimulationStart);
+		if (isPCLAvailable) ignore = m_streamline->SetPCLMarker(PCLMarker::eSimulationStart);
 
 		{
 			m_camera.PreviousWorldToView = m_cameraController.GetWorldToView();
@@ -504,7 +502,7 @@ private:
 
 		if (IsSceneReady()) UpdateScene();
 
-		if (isReflexAvailable) ignore = m_streamline->SetReflexMarker(ReflexMarker::eSimulationEnd);
+		if (isPCLAvailable) ignore = m_streamline->SetPCLMarker(PCLMarker::eSimulationEnd);
 	}
 
 	void Render() {
@@ -514,9 +512,9 @@ private:
 
 		const auto commandList = m_deviceResources->GetCommandList();
 
-		const auto isReflexAvailable = m_streamline->IsFeatureAvailable(kFeatureReflex);
+		const auto isPCLAvailable = m_streamline->IsFeatureAvailable(kFeaturePCL);
 
-		if (isReflexAvailable) ignore = m_streamline->SetReflexMarker(ReflexMarker::eRenderSubmitStart);
+		if (isPCLAvailable) ignore = m_streamline->SetPCLMarker(PCLMarker::eRenderSubmitStart);
 
 		const auto renderTargetView = m_deviceResources->GetRenderTargetView();
 		commandList->OMSetRenderTargets(1, &renderTargetView, FALSE, nullptr);
@@ -552,15 +550,15 @@ private:
 			if (m_UIStates.IsVisible) RenderUI();
 		}
 
-		if (isReflexAvailable) {
-			ignore = m_streamline->SetReflexMarker(ReflexMarker::eRenderSubmitEnd);
+		if (isPCLAvailable) {
+			ignore = m_streamline->SetPCLMarker(PCLMarker::eRenderSubmitEnd);
 
-			ignore = m_streamline->SetReflexMarker(ReflexMarker::ePresentStart);
+			ignore = m_streamline->SetPCLMarker(PCLMarker::ePresentStart);
 		}
 
 		m_deviceResources->Present();
 
-		if (isReflexAvailable) ignore = m_streamline->SetReflexMarker(ReflexMarker::ePresentEnd);
+		if (isPCLAvailable) ignore = m_streamline->SetPCLMarker(PCLMarker::ePresentEnd);
 
 		m_deviceResources->WaitForGpu();
 
@@ -1085,11 +1083,6 @@ private:
 		OnRenderSizeChanged();
 	}
 
-	void SetFrameGenerationOptions(bool enable = g_graphicsSettings.PostProcessing.IsDLSSFrameGenerationEnabled && g_graphicsSettings.ReflexMode != ReflexMode::eOff) {
-		m_DLSSGOptions.mode = enable ? DLSSGMode::eAuto : DLSSGMode::eOff;
-		if (!enable || IsSceneReady()) ignore = m_streamline->SetConstants(m_DLSSGOptions);
-	}
-
 	void ResetTemporalAccumulation() {
 		m_slConstants.reset = Boolean::eTrue;
 
@@ -1286,6 +1279,9 @@ private:
 	}
 
 	void ProcessDLSSFrameGeneration(Texture& inColor) {
+		m_DLSSGOptions.mode = g_graphicsSettings.PostProcessing.IsDLSSFrameGenerationEnabled && g_graphicsSettings.ReflexMode != ReflexMode::eOff ? DLSSGMode::eAuto : DLSSGMode::eOff;
+		ignore = m_streamline->SetConstants(m_DLSSGOptions);
+
 		ResourceTagDesc resourceTagDescs[]{
 			CreateResourceTagDesc(kBufferTypeDepth, *m_renderTextures.at(RenderTextureNames::NormalizedDepth)),
 			CreateResourceTagDesc(kBufferTypeMotionVectors, *m_renderTextures.at(RenderTextureNames::MotionVectors)),
@@ -1567,7 +1563,6 @@ private:
 								g_graphicsSettings.ReflexMode = ReflexMode;
 
 								SetReflexOptions();
-								SetFrameGenerationOptions();
 							}
 
 							if (isSelected) ImGui::SetItemDefaultFocus();
@@ -1708,8 +1703,6 @@ private:
 						if (const ImGuiEx::ScopedEnablement scopedEnablement(m_streamline->IsFeatureAvailable(kFeatureDLSS_G));
 							ImGui::Checkbox("NVIDIA DLSS Frame Generation", &isEnabled)) {
 							postProcessingSetttings.IsDLSSFrameGenerationEnabled = isEnabled;
-
-							SetFrameGenerationOptions();
 						}
 					}
 
