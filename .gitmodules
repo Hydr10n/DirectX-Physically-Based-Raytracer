@@ -20,12 +20,12 @@
 [submodule "External/NVIDIA/NRI"]
 	path = External/NVIDIA/NRI
 	url = https://github.com/NVIDIAGameWorks/NRI
-[submodule "External/AMD/FSR2"]
-	path = External/AMD/FSR2
-	url = https://github.com/GPUOpen-Effects/FidelityFX-FSR2
 [submodule "External/ImGuiFileDialog"]
 	path = External/ImGuiFileDialog
 	url = https://github.com/aiekick/ImGuiFileDialog
 [submodule "External/AMD/MemoryAllocator/D3D12"]
 	path = External/AMD/MemoryAllocator/D3D12
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator
+[submodule "External/Intel/XeSS"]
+	path = External/Intel/XeSS
+	url = https://github.com/intel/xess
