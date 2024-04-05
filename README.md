@@ -39,7 +39,7 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 	- NVIDIA Real-Time Denoisers
 		- Denoiser: ReBLUR | ReLAX
 		- Validation Overlay
-	- Super Resolution: NVIDIA DLSS | AMD FSR
+	- Super Resolution: NVIDIA DLSS | Intel XeSS
 	- Frame Generation: NVIDIA DLSS
 	- NVIDIA Image Scaling
 		- Sharpness
