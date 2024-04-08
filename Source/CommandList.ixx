@@ -36,7 +36,10 @@ export namespace DirectX {
 		T* operator->() const noexcept { return m_commandList.Get(); }
 		operator T* () const noexcept { return m_commandList.Get(); }
 
-		void Begin() { ThrowIfFailed(m_commandList->Reset(m_commandAllocator.Get(), nullptr)); }
+		void Begin() {
+			ThrowIfFailed(m_commandAllocator->Reset());
+			ThrowIfFailed(m_commandList->Reset(m_commandAllocator.Get(), nullptr));
+		}
 
 		future<void> End(ID3D12CommandQueue* pCommandQueue) {
 			return async(launch::async, [=] {
