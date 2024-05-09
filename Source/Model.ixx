@@ -13,6 +13,8 @@ module;
 #include "directxtk12/SimpleMath.h"
 #include "directxtk12/ResourceUploadBatch.h"
 
+#include "MathLib.h"
+
 export module Model;
 
 import CommandList;
@@ -30,6 +32,7 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 using namespace ErrorHelpers;
 using namespace Microsoft::WRL;
+using namespace Packed;
 using namespace ResourceHelpers;
 using namespace std;
 using namespace std::filesystem;
@@ -70,9 +73,9 @@ export {
 		VertexDesc GetVertexDesc() const {
 			return {
 				.Stride = sizeof(VertexType),
-				.NormalOffset = offsetof(VertexType, normal),
-				.TextureCoordinateOffset = offsetof(VertexType, textureCoordinate),
-				.TangentOffset = static_cast<UINT>(HasTangents ? offsetof(VertexType, tangent) : ~0u)
+				.NormalOffset = offsetof(VertexType, Normal),
+				.TextureCoordinateOffset = offsetof(VertexType, TextureCoordinate),
+				.TangentOffset = static_cast<UINT>(HasTangents ? offsetof(VertexType, Tangent) : ~0u)
 			};
 		}
 	};
@@ -253,7 +256,7 @@ export {
 				auto& vertex = vertices.emplace_back();
 				if (mesh.HasPositions()) {
 					auto position = mesh.mVertices[i];
-					vertex.position = reinterpret_cast<const XMFLOAT3&>(position);
+					vertex.Position = reinterpret_cast<const XMFLOAT3&>(position);
 					position = transform * position;
 					if (position.x < mesh.mAABB.mMin.x) mesh.mAABB.mMin.x = position.x;
 					else if (position.x > mesh.mAABB.mMax.x) mesh.mAABB.mMax.x = position.x;
@@ -262,9 +265,16 @@ export {
 					if (position.z < mesh.mAABB.mMin.z) mesh.mAABB.mMin.z = position.z;
 					else if (position.z > mesh.mAABB.mMax.z) mesh.mAABB.mMax.z = position.z;
 				}
-				if (mesh.HasNormals()) vertex.normal = reinterpret_cast<const XMFLOAT3&>(mesh.mNormals[i]);
-				if (mesh.HasTextureCoords(0)) vertex.textureCoordinate = reinterpret_cast<const XMFLOAT2&>(mesh.mTextureCoords[0][i]);
-				if (mesh.HasTangentsAndBitangents()) vertex.tangent = reinterpret_cast<const XMFLOAT3&>(mesh.mTangents[i]);
+				if (mesh.HasNormals()) {
+					vertex.Normal = reinterpret_cast<const XMFLOAT2&>(EncodeUnitVector(reinterpret_cast<const float3&>(mesh.mNormals[i]), true));
+				}
+				if (mesh.HasTextureCoords(0)) {
+					const auto& [x, y, z] = mesh.mTextureCoords[0][i];
+					vertex.TextureCoordinate = sf2_to_h2(x, y);
+				}
+				if (mesh.HasTangentsAndBitangents()) {
+					vertex.Tangent = reinterpret_cast<const XMFLOAT2&>(EncodeUnitVector(reinterpret_cast<const float3&>(mesh.mTangents[i]), true));
+				}
 			}
 
 			uint32_t indexCount = 0;
@@ -382,9 +392,9 @@ export {
 			skeletalVertices.reserve(size(vertices));
 			for (const auto& vertex : vertices) {
 				auto& skeletalVertex = skeletalVertices.emplace_back();
-				skeletalVertex.position = vertex.position;
-				skeletalVertex.normal = vertex.normal;
-				skeletalVertex.tangent = vertex.tangent;
+				skeletalVertex.Position = vertex.Position;
+				skeletalVertex.Normal = vertex.Normal;
+				skeletalVertex.Tangent = vertex.Tangent;
 			}
 
 			for (const auto i : views::iota(0u, mesh.mNumBones)) {
@@ -405,9 +415,9 @@ export {
 				for (const auto i : views::iota(0u, bone.mNumWeights)) {
 					const auto& weight = bone.mWeights[i];
 					for (auto& vertex = skeletalVertices[weight.mVertexId]; const auto i : views::iota(0, 4)) {
-						if (weight.mWeight != 0 && vertex.bones[i].ID == ~0u) {
-							vertex.bones[i].ID = boneID;
-							vertex.bones[i].Weight = weight.mWeight;
+						if (weight.mWeight != 0 && vertex.Bones[i].ID == ~0u) {
+							vertex.Bones[i].ID = boneID;
+							vertex.Bones[i].Weight = weight.mWeight;
 							break;
 						}
 					}
