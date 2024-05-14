@@ -31,6 +31,7 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 	- Russian Roulette
 	- Bounces
 	- Samples per Pixel
+	- NVIDIA Shader Execution Reordering
 	- NVIDIA RTX Dynamic Illumination
 		- Local Light Samples
 		- BRDF Samples
@@ -90,6 +91,7 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 - Graphics:
 	- Basic: Any GPU capable of DirectX Raytracing Tier 1.1
 	- NVIDIA
+		- Shader Execution Reordering: GeForce RTX 40 Series
 		- DLSS
 			- Super Resolution: GeForce RTX 20 Series
 			- Frame Generation: GeForce RTX 40 Series
