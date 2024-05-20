@@ -33,9 +33,6 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 	- Samples per Pixel
 	- NVIDIA Shader Execution Reordering
 	- NVIDIA RTX Dynamic Illumination
-		- Local Light Samples
-		- BRDF Samples
-		- Spatio-Temporal Samples
 - Post-Processing
 	- NVIDIA Real-Time Denoisers
 		- Denoiser: ReBLUR | ReLAX
