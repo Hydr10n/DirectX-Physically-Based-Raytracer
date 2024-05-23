@@ -216,10 +216,10 @@ export {
 								}
 
 								m_skeletalMeshSkinning.GPUBuffers = {
-									.InSkeletalVertices = mesh->SkeletalVertices.get(),
-									.InSkeletalTransforms = model.SkeletalTransforms.get(),
-									.OutVertices = mesh->Vertices.get(),
-									.OutMotionVectors = mesh->MotionVectors.get()
+									.SkeletalVertices = mesh->SkeletalVertices.get(),
+									.SkeletalTransforms = model.SkeletalTransforms.get(),
+									.Vertices = mesh->Vertices.get(),
+									.MotionVectors = mesh->MotionVectors.get()
 								};
 
 								m_skeletalMeshSkinning.Process(m_commandList);
