@@ -59,12 +59,10 @@ set_target_properties(${project} PROPERTIES FOLDER ${project})
 
 target_compile_definitions(${project} PRIVATE NOMINMAX)
 
-set(AMD_CXX_include_directories
-	"MemoryAllocator/D3D12/include")
+set(AMD_CXX_include_directories "MemoryAllocator/D3D12/include")
 list(TRANSFORM AMD_CXX_include_directories PREPEND ${AMD_library_path})
 
-set(Intel_CXX_include_directories
-	"XeSS/inc")
+set(Intel_CXX_include_directories "XeSS/inc")
 list(TRANSFORM Intel_CXX_include_directories PREPEND ${Intel_library_path})
 
 set(NVIDIA_CXX_include_directories
@@ -76,6 +74,7 @@ set(NVIDIA_CXX_include_directories
 	"RTXMU/include"
 	"Streamline/include")
 list(TRANSFORM NVIDIA_CXX_include_directories PREPEND ${NVIDIA_library_path})
+
 target_include_directories(${project} PRIVATE
 	${AMD_CXX_include_directories}
 	${Intel_CXX_include_directories}
@@ -83,14 +82,15 @@ target_include_directories(${project} PRIVATE
 	"External/ImGuiFileDialog"
 	${CMAKE_CURRENT_BINARY_DIR})
 
-include(ShaderCompilation.cmake)
 set(NVIDIA_shader_include_directories
 	"MathLib"
 	"NRD/Shaders/Include"
 	"NVAPI"
 	"RTXDI/rtxdi-sdk/include")
 list(TRANSFORM NVIDIA_shader_include_directories PREPEND ${NVIDIA_library_path})
-file(GLOB shaders "Shaders/*.hlsl")
+
+file(GLOB shaders CONFIGURE_DEPENDS "Shaders/*.hlsl")
+include(ShaderCompilation.cmake)
 CompileShaders(target ${project}_Shaders
 	config ${CMAKE_CURRENT_SOURCE_DIR}/Shaders.cfg
 	out ${CMAKE_CURRENT_BINARY_DIR}

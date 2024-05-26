@@ -42,11 +42,8 @@ export struct SkeletalMeshSkinning {
 	}
 
 	void Process(ID3D12GraphicsCommandList* pCommandList) {
-		const auto barriers = {
-			CD3DX12_RESOURCE_BARRIER::UAV(*GPUBuffers.Vertices),
-			CD3DX12_RESOURCE_BARRIER::UAV(*GPUBuffers.MotionVectors)
-		};
-		pCommandList->ResourceBarrier(static_cast<UINT>(size(barriers)), data(barriers));
+		GPUBuffers.Vertices->InsertUAVBarrier(pCommandList);
+		GPUBuffers.MotionVectors->InsertUAVBarrier(pCommandList);
 
 		const auto vertexCount = static_cast<UINT>(GPUBuffers.Vertices->GetCount());
 
