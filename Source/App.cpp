@@ -816,13 +816,13 @@ private:
 			initialSamplingParameters.localLightSamplingMode = settings.InitialSampling.LocalLight.Mode;
 			context.setInitialSamplingParameters(initialSamplingParameters);
 
-			/*auto temporalResamplingParameters = context.getTemporalResamplingParameters();
+			auto temporalResamplingParameters = context.getTemporalResamplingParameters();
 			temporalResamplingParameters.temporalBiasCorrection = ReSTIRDI_TemporalBiasCorrectionMode::Raytraced;
 			context.setTemporalResamplingParameters(temporalResamplingParameters);
 
 			auto spatialResamplingParameters = context.getSpatialResamplingParameters();
 			spatialResamplingParameters.spatialBiasCorrection = ReSTIRDI_SpatialBiasCorrectionMode::Raytraced;
-			context.setSpatialResamplingParameters(spatialResamplingParameters);*/
+			context.setSpatialResamplingParameters(spatialResamplingParameters);
 		}
 	}
 
