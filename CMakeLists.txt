@@ -8,7 +8,7 @@ set(project "PhysicallyBasedRaytracer")
 
 project(${project})
 
-set(DXC_PATH "$ENV{VCPKG_ROOT}/packages/directx-dxc_x64-windows/tools/directx-dxc/" CACHE STRING "")
+set(DXC_PATH "$ENV{VCPKG_ROOT}/packages/directx-dxc_x64-windows/tools/directx-dxc/dxc.exe" CACHE STRING "")
 
 set(AMD_library_path "${CMAKE_CURRENT_SOURCE_DIR}/External/AMD/")
 
@@ -26,6 +26,7 @@ add_subdirectory("${NVIDIA_library_path}NRD")
 
 option(NRI_ENABLE_D3D11_SUPPORT "" OFF)
 option(NRI_ENABLE_VK_SUPPORT "" OFF)
+option(NRI_ENABLE_EXTERNAL_LIBRARIES OFF)
 add_subdirectory("${NVIDIA_library_path}NRI")
 
 add_subdirectory("${NVIDIA_library_path}RTXDI/rtxdi-sdk")

@@ -29,7 +29,7 @@ using namespace std;
 namespace {
 	auto IsEmissive(const Model& model, UINT materialIndex) {
 		constexpr auto Max = [](const XMFLOAT3& value) { return max({ value.x, value.y, value.z }); };
-		return materialIndex != ~0u && (Max(model.Materials[materialIndex].EmissiveColor) > 0 || model.Textures[materialIndex].contains(TextureMap::EmissiveColor));
+		return materialIndex != ~0u && (Max(model.Materials[materialIndex].EmissiveColor) > 0 || model.Textures[materialIndex].contains(TextureMapType::EmissiveColor));
 	}
 }
 

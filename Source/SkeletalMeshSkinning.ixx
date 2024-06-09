@@ -26,6 +26,9 @@ export struct SkeletalMeshSkinning {
 		DefaultBuffer<XMFLOAT3>* MotionVectors;
 	} GPUBuffers{};
 
+	SkeletalMeshSkinning(const SkeletalMeshSkinning&) = delete;
+	SkeletalMeshSkinning& operator=(const SkeletalMeshSkinning&) = delete;
+
 	explicit SkeletalMeshSkinning(ID3D12Device* pDevice) noexcept(false) {
 		constexpr D3D12_SHADER_BYTECODE ShaderByteCode{ g_SkeletalMeshSkinning_dxil, size(g_SkeletalMeshSkinning_dxil) };
 
@@ -42,9 +45,6 @@ export struct SkeletalMeshSkinning {
 	}
 
 	void Process(ID3D12GraphicsCommandList* pCommandList) {
-		GPUBuffers.Vertices->InsertUAVBarrier(pCommandList);
-		GPUBuffers.MotionVectors->InsertUAVBarrier(pCommandList);
-
 		const auto vertexCount = static_cast<UINT>(GPUBuffers.Vertices->GetCount());
 
 		pCommandList->SetComputeRoot32BitConstant(0, vertexCount, 0);
@@ -54,6 +54,12 @@ export struct SkeletalMeshSkinning {
 		pCommandList->SetComputeRootUnorderedAccessView(4, GPUBuffers.MotionVectors->GetNative()->GetGPUVirtualAddress());
 
 		pCommandList->Dispatch((vertexCount + 255) / 256, 1, 1);
+
+		const auto barriers = {
+			CD3DX12_RESOURCE_BARRIER::UAV(*GPUBuffers.Vertices),
+			CD3DX12_RESOURCE_BARRIER::UAV(*GPUBuffers.MotionVectors)
+		};
+		pCommandList->ResourceBarrier(static_cast<UINT>(size(barriers)), data(barriers));
 	}
 
 private:

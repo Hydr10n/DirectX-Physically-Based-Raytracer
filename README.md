@@ -9,11 +9,6 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 ---
 
 ## Features
-### Inline Raytracing
-- Diffuse Reflection
-- Specular Reflection
-- Specular Transmission
-
 ### PBR Metallic/Roughness Workflow
 
 ### Skeletal Animation
@@ -30,12 +25,12 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 - Raytracing
 	- Russian Roulette
 	- Bounces
-	- Samples per Pixel
-	- NVIDIA Shader Execution Reordering
+	- Samples/Pixel
+- NVIDIA Shader Execution Reordering
 	- NVIDIA RTX Dynamic Illumination
 		- ReGIR
 			- Cell Size
-			- Visualize Cells
+			- Cell Visualization
 		- ReSTIR DI
 			- Initial Sampling
 				- Local Light
