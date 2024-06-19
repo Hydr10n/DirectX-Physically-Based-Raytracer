@@ -30,7 +30,7 @@ using GamepadButtonState = GamePad::ButtonStateTracker::ButtonState;
 using Key = Keyboard::Keys;
 
 export {
-	JSON_CONVERSION_FUNCTIONS(RenderObjectDesc, Name, Transform, IsVisible, ModelURI, AnimationURI);
+	JSON_CONVERSION_FUNCTIONS(RenderObjectDesc, Name, Transform, IsVisible, Model, Animation);
 
 	JSON_CONVERSION_FUNCTIONS(decltype(SceneDesc::Camera), Position, Rotation);
 	JSON_CONVERSION_FUNCTIONS(decltype(SceneDesc::EnvironmentTexture), FilePath, Transform);
@@ -59,8 +59,8 @@ export {
 							throw runtime_error(format("{}: {}: {} {} not found", filePathString, renderObjectInfo, name, URI));
 						}
 					};
-					CheckResources("Models", Models, renderObject.ModelURI);
-					CheckResources("Animations", Animations, renderObject.AnimationURI);
+					CheckResources("Models", Models, renderObject.Model);
+					CheckResources("Animations", Animations, renderObject.Animation);
 				}
 
 				const auto ResolvePath = [&](path& path) { if (!empty(path) && !path.is_absolute()) path = filesystem::path(filePath).replace_filename(path); };

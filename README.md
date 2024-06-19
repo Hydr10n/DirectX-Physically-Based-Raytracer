@@ -37,6 +37,12 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 					- Mode: Uniform | Power RIS | ReGIR RIS
 					- Samples
 				- BRDF Samples
+	- NVIDIA RTX Global Illumination
+		- Spatially Hashed Radiance Cache
+			- Downscale Factor
+			- Scene Scale
+			- Roughness Threshold
+			- Hash Grid Visualization
 - Post-Processing
 	- NVIDIA Real-Time Denoisers
 		- Denoiser: ReBLUR | ReLAX

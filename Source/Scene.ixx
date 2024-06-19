@@ -44,7 +44,7 @@ export {
 		bool IsVisible = true;
 	};
 
-	struct RenderObjectDesc : RenderObjectBase { string ModelURI, AnimationURI; };
+	struct RenderObjectDesc : RenderObjectBase { string Model, Animation; };
 
 	struct RenderObject : RenderObjectBase {
 		Model Model;
@@ -121,9 +121,13 @@ export {
 			{
 				unordered_map<string, path> modelDescs, animationDescs;
 				for (const auto renderObject : sceneDesc.RenderObjects) {
-					if (!empty(renderObject.ModelURI)) modelDescs.try_emplace(renderObject.ModelURI, sceneDesc.Models.at(renderObject.ModelURI));
+					if (!empty(renderObject.Model)) {
+						modelDescs.try_emplace(renderObject.Model, sceneDesc.Models.at(renderObject.Model));
+					}
 
-					if (!empty(renderObject.AnimationURI)) animationDescs.try_emplace(renderObject.AnimationURI, sceneDesc.Animations.at(renderObject.AnimationURI));
+					if (!empty(renderObject.Animation)) {
+						animationDescs.try_emplace(renderObject.Animation, sceneDesc.Animations.at(renderObject.Animation));
+					}
 				}
 
 				Models.Load(modelDescs, true, 8, m_device, m_commandQueue, descriptorHeap, descriptorIndex);
@@ -134,12 +138,12 @@ export {
 					RenderObject renderObject;
 					reinterpret_cast<RenderObjectBase&>(renderObject) = renderObjectDesc;
 
-					if (!empty(renderObjectDesc.ModelURI)) {
-						renderObject.Model = Model(*Models.at(renderObjectDesc.ModelURI), m_device, m_commandQueue, descriptorHeap, descriptorIndex);
+					if (!empty(renderObjectDesc.Model)) {
+						renderObject.Model = Model(*Models.at(renderObjectDesc.Model), m_device, m_commandQueue, descriptorHeap, descriptorIndex);
 					}
 
-					if (!empty(renderObjectDesc.AnimationURI)) {
-						renderObject.AnimationCollection = *AnimationCollections.at(renderObjectDesc.AnimationURI);
+					if (!empty(renderObjectDesc.Animation)) {
+						renderObject.AnimationCollection = *AnimationCollections.at(renderObjectDesc.Animation);
 						renderObject.AnimationCollection.SetBoneInfo(renderObject.Model.BoneInfo);
 					}
 
