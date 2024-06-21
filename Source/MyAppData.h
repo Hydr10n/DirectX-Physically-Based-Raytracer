@@ -208,7 +208,7 @@ public:
 				} RTXDI;
 
 				struct RTXGI {
-					RTXGITechnique Technique = RTXGITechnique::None;
+					RTXGITechnique Technique = RTXGITechnique::SHARC;
 
 					struct SHARC {
 						static constexpr UINT MaxDownscaleFactor = 10;
