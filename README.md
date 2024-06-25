@@ -28,10 +28,10 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 	- Samples/Pixel
 - NVIDIA Shader Execution Reordering
 	- NVIDIA RTX Dynamic Illumination
-		- ReGIR
-			- Cell Size
-			- Cell Visualization
 		- ReSTIR DI
+			- ReGIR
+				- Cell Size
+				- Cell Visualization
 			- Initial Sampling
 				- Local Light
 					- Mode: Uniform | Power RIS | ReGIR RIS

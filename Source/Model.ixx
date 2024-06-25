@@ -329,7 +329,7 @@ export {
 				{
 					_material.Transmission = 1 - _material.Transmission;
 				}
-				material.Get(AI_MATKEY_REFRACTI, _material.RefractiveIndex);
+				material.Get(AI_MATKEY_REFRACTI, _material.IOR);
 				if (aiString alphaMode; material.Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == aiReturn_SUCCESS) {
 					if (!_stricmp(alphaMode.C_Str(), "Opaque")) _material.AlphaMode = AlphaMode::Opaque;
 					else if (!_stricmp(alphaMode.C_Str(), "Blend")) _material.AlphaMode = AlphaMode::Blend;

@@ -205,7 +205,7 @@ export {
 				const auto& model = renderObject.Model;
 				if (const auto& animationCollection = renderObject.AnimationCollection; !empty(animationCollection) && animationCollection.HasBoneInfo()) {
 					if (const auto& skeletalTransforms = animationCollection[animationCollection.GetSelectedIndex()].GetSkeletalTransforms(); !empty(skeletalTransforms)) {
-						model.SkeletalTransforms->Upload(skeletalTransforms);
+						model.SkeletalTransforms->Write(skeletalTransforms);
 					}
 
 					for (const auto& meshNode : model.MeshNodes) {
