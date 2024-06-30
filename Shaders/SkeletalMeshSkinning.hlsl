@@ -49,12 +49,12 @@ void main(uint vertexID : SV_DispatchThreadID)
 	}
 
 	const float3
-		position = STL::Geometry::AffineTransform(transform, g_skeletalVertices[vertexID].Position),
-		normal = STL::Packing::DecodeUnitVector(g_skeletalVertices[vertexID].Normal, true, false),
-		tangent = STL::Packing::DecodeUnitVector(g_skeletalVertices[vertexID].Tangent, true, false);
-	const float3x3 inverseTransposeTransform = Math::InverseTranspose((float3x3)transform);
+		position = Geometry::AffineTransform(transform, g_skeletalVertices[vertexID].Position),
+		normal = Packing::DecodeUnitVector(g_skeletalVertices[vertexID].Normal, true, false),
+		tangent = Packing::DecodeUnitVector(g_skeletalVertices[vertexID].Tangent, true, false);
+	const float3x3 rotation = (float3x3)transform;
 	g_motionVectors[vertexID] = g_vertices[vertexID].Position - position;
 	g_vertices[vertexID].Position = position;
-	g_vertices[vertexID].Normal = STL::Packing::EncodeUnitVector(normalize(STL::Geometry::RotateVector(inverseTransposeTransform, normal)), true);
-	g_vertices[vertexID].Tangent = STL::Packing::EncodeUnitVector(normalize(STL::Geometry::RotateVector(inverseTransposeTransform, tangent)), true);
+	g_vertices[vertexID].Normal = Packing::EncodeUnitVector(normalize(Geometry::RotateVector(Math::InverseTranspose(rotation), normal)), true);
+	g_vertices[vertexID].Tangent = Packing::EncodeUnitVector(normalize(Geometry::RotateVector(rotation, tangent)), true);
 }

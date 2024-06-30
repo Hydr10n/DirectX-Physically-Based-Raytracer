@@ -13,7 +13,8 @@ module;
 #include "directxtk12/SimpleMath.h"
 #include "directxtk12/ResourceUploadBatch.h"
 
-#include "MathLib.h"
+#include "ml.h"
+#include "ml.hlsli"
 
 export module Model;
 
@@ -32,7 +33,7 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 using namespace ErrorHelpers;
 using namespace Microsoft::WRL;
-using namespace Packed;
+using namespace Packing;
 using namespace ResourceHelpers;
 using namespace std;
 using namespace std::filesystem;
@@ -189,12 +190,12 @@ export {
 
 			constexpr auto InitializeAABB = [] { return aiAABB{ aiVector3D(numeric_limits<float>::max()), aiVector3D(-numeric_limits<float>::max()) }; };
 			constexpr auto CalculateAABB = [](const aiAABB& AABB, aiAABB& newAABB) {
-				newAABB.mMin.x = min(newAABB.mMin.x, AABB.mMin.x);
-				newAABB.mMin.y = min(newAABB.mMin.y, AABB.mMin.y);
-				newAABB.mMin.z = min(newAABB.mMin.z, AABB.mMin.z);
-				newAABB.mMax.x = max(newAABB.mMax.x, AABB.mMax.x);
-				newAABB.mMax.y = max(newAABB.mMax.y, AABB.mMax.y);
-				newAABB.mMax.z = max(newAABB.mMax.z, AABB.mMax.z);
+				newAABB.mMin.x = ::min(newAABB.mMin.x, AABB.mMin.x);
+				newAABB.mMin.y = ::min(newAABB.mMin.y, AABB.mMin.y);
+				newAABB.mMin.z = ::min(newAABB.mMin.z, AABB.mMin.z);
+				newAABB.mMax.x = ::max(newAABB.mMax.x, AABB.mMax.x);
+				newAABB.mMax.y = ::max(newAABB.mMax.y, AABB.mMax.y);
+				newAABB.mMax.z = ::max(newAABB.mMax.z, AABB.mMax.z);
 			};
 
 			auto modelAABB = InitializeAABB();
@@ -269,8 +270,7 @@ export {
 					vertex.Normal = reinterpret_cast<const XMFLOAT2&>(EncodeUnitVector(reinterpret_cast<const float3&>(mesh.mNormals[i]), true));
 				}
 				if (mesh.HasTextureCoords(0)) {
-					const auto& [x, y, z] = mesh.mTextureCoords[0][i];
-					vertex.TextureCoordinate = sf2_to_h2(x, y);
+					vertex.TextureCoordinate = float2_to_sfloat_16_16(reinterpret_cast<const float2&>(mesh.mTextureCoords[0][i]));
 				}
 				if (mesh.HasTangentsAndBitangents()) {
 					vertex.Tangent = reinterpret_cast<const XMFLOAT2&>(EncodeUnitVector(reinterpret_cast<const float3&>(mesh.mTangents[i]), true));
