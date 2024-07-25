@@ -38,7 +38,7 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 					- Samples
 				- BRDF Samples
 	- NVIDIA RTX Global Illumination
-		- Spatially Hashed Radiance Cache
+		- SHARC
 			- Downscale Factor
 			- Scene Scale
 			- Roughness Threshold
@@ -107,10 +107,10 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 
 ## Showcase
 - Cornell Box
-<div align="center">
+<figure align="center">
 	<img src="Screenshots/Cornell Box.png">
-	<p>16 SPP, Denoised</p>
-</div>
+	<figcaption>16 SPP, Denoised</figcaption>
+</figure>
 
 <br>
 
@@ -120,7 +120,7 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 - [Stars Dance in Galaxy](https://sketchfab.com/3d-models/stars-dance-in-galaxy-069aaa4b9dda4366b4379b551a605766)
 - [Relativistic Kill Vehicle - Kurzgesagt](https://sketchfab.com/3d-models/relativistic-kill-vehicle-kurzgesagt-cd4f02c868314a5fb7c786d6df8e6773)
 - [Magic Gost](https://sketchfab.com/3d-models/magic-gost-e0acec53aa504b10845f286ee68a1690)
-<div align="center">
+<figure align="center">
 	<img src="Screenshots/Space.png">
-	<p>1 SPP, Denoised</p>
-</div>
+	<figcaption>1 SPP, Denoised</figcaption>
+</figure>

@@ -321,12 +321,14 @@ export {
 				instanceDescs.reserve(size(m_instanceData));
 				for (UINT instanceIndex = 0; const auto & renderObject : RenderObjects) {
 					for (const auto& meshNode : renderObject.Model.MeshNodes) {
+						const auto& instanceData = m_instanceData[instanceIndex++];
 						auto& instanceDesc = instanceDescs.emplace_back(D3D12_RAYTRACING_INSTANCE_DESC{
 							.InstanceMask = renderObject.IsVisible ? ~0u : 0,
+							.InstanceContributionToHitGroupIndex = instanceData.FirstGeometryIndex,
 							.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE,
 							.AccelerationStructure = m_accelerationStructureManager->GetAccelStructGPUVA(m_bottomLevelAccelerationStructureIDs.at(meshNode.get()))
 							});
-						reinterpret_cast<XMFLOAT3X4&>(instanceDesc.Transform) = m_instanceData[instanceIndex++].ObjectToWorld;
+						reinterpret_cast<XMFLOAT3X4&>(instanceDesc.Transform) = instanceData.ObjectToWorld;
 					}
 				}
 				m_topLevelAccelerationStructure->Build(m_commandList, instanceDescs, updateOnly);

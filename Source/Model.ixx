@@ -40,8 +40,10 @@ using namespace std::filesystem;
 using namespace TextureHelpers;
 
 namespace {
-	constexpr auto ToBoundingBox(const aiAABB& AABB) {
-		return BoundingBox{ reinterpret_cast<const XMFLOAT3&>((AABB.mMin + AABB.mMax) * 0.5f), reinterpret_cast<const XMFLOAT3&>((AABB.mMax - AABB.mMin) * 0.5f) };
+	aiAABB InitializeAABB() { return { aiVector3D(numeric_limits<float>::max()), aiVector3D(-numeric_limits<float>::max()) }; }
+
+	constexpr BoundingBox ToBoundingBox(const aiAABB& AABB) {
+		return { reinterpret_cast<const XMFLOAT3&>((AABB.mMin + AABB.mMax) * 0.5f), reinterpret_cast<const XMFLOAT3&>((AABB.mMax - AABB.mMin) * 0.5f) };
 	}
 }
 
@@ -103,8 +105,6 @@ export {
 		BoneInfoDictionary BoneInfo;
 
 		shared_ptr<UploadBuffer<XMFLOAT3X4>> SkeletalTransforms;
-
-		BoundingBox BoundingBox{ {}, {} };
 
 		vector<Material> Materials;
 		vector<map<TextureMapType, shared_ptr<Texture>>> Textures;
@@ -174,7 +174,6 @@ export {
 
 			Name = source.Name;
 			BoneInfo = source.BoneInfo;
-			BoundingBox = source.BoundingBox;
 			Materials = source.Materials;
 			Textures = source.Textures;
 		}
@@ -184,19 +183,11 @@ export {
 
 			Importer importer;
 			const auto scene = importer.ReadFile(reinterpret_cast<const char*>(filePath.u8string().c_str()), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_ConvertToLeftHanded);
-			if (scene == nullptr || scene->mRootNode == nullptr) throw runtime_error(format("Assimp: {}", importer.GetErrorString()));
+			if (scene == nullptr || scene->mRootNode == nullptr) {
+				throw runtime_error(format("Assimp: {}", importer.GetErrorString()));
+			}
 
 			Name = scene->mName.C_Str();
-
-			constexpr auto InitializeAABB = [] { return aiAABB{ aiVector3D(numeric_limits<float>::max()), aiVector3D(-numeric_limits<float>::max()) }; };
-			constexpr auto CalculateAABB = [](const aiAABB& AABB, aiAABB& newAABB) {
-				newAABB.mMin.x = ::min(newAABB.mMin.x, AABB.mMin.x);
-				newAABB.mMin.y = ::min(newAABB.mMin.y, AABB.mMin.y);
-				newAABB.mMin.z = ::min(newAABB.mMin.z, AABB.mMin.z);
-				newAABB.mMax.x = ::max(newAABB.mMax.x, AABB.mMax.x);
-				newAABB.mMax.y = ::max(newAABB.mMax.y, AABB.mMax.y);
-				newAABB.mMax.z = ::max(newAABB.mMax.z, AABB.mMax.z);
-			};
 
 			auto modelAABB = InitializeAABB();
 
@@ -205,6 +196,15 @@ export {
 				if (node.mParent != nullptr) node.mTransformation = node.mParent->mTransformation * node.mTransformation;
 
 				if (node.mNumMeshes) {
+					constexpr auto MergeAABB = [](aiAABB& newAABB, const aiAABB& AABB) {
+						newAABB.mMin.x = ::min(newAABB.mMin.x, AABB.mMin.x);
+						newAABB.mMin.y = ::min(newAABB.mMin.y, AABB.mMin.y);
+						newAABB.mMin.z = ::min(newAABB.mMin.z, AABB.mMin.z);
+						newAABB.mMax.x = ::max(newAABB.mMax.x, AABB.mMax.x);
+						newAABB.mMax.y = ::max(newAABB.mMax.y, AABB.mMax.y);
+						newAABB.mMax.z = ::max(newAABB.mMax.z, AABB.mMax.z);
+					};
+
 					auto meshAABB = InitializeAABB();
 
 					auto meshNode = make_shared<MeshNode>();
@@ -216,10 +216,10 @@ export {
 					meshNode->Meshes.reserve(node.mNumMeshes);
 					for (const auto i : views::iota(0u, node.mNumMeshes)) {
 						auto& mesh = *scene->mMeshes[node.mMeshes[i]];
-						if (const auto _mesh = ProcessMesh(filePath, *scene, node.mTransformation, mesh, loadedTextures, pDevice, resourceUploadBatch, descriptorHeap, descriptorIndex)) {
+						if (const auto _mesh = ProcessMesh(filePath, *scene, mesh, loadedTextures, pDevice, resourceUploadBatch, descriptorHeap, descriptorIndex)) {
 							meshNode->Meshes.emplace_back(_mesh);
 
-							CalculateAABB(mesh.mAABB, meshAABB);
+							MergeAABB(meshAABB, mesh.mAABB);
 						}
 					}
 
@@ -227,7 +227,7 @@ export {
 
 					MeshNodes.emplace_back(meshNode);
 
-					CalculateAABB(meshAABB, modelAABB);
+					MergeAABB(modelAABB, meshAABB);
 				}
 
 				for (const auto i : views::iota(0u, node.mNumChildren)) self(*node.mChildren[i]);
@@ -235,8 +235,6 @@ export {
 			ProcessNode(*scene->mRootNode);
 
 			if (const auto count = size(BoneInfo)) SkeletalTransforms = make_shared<UploadBuffer<XMFLOAT3X4>>(pDevice, count);
-
-			BoundingBox = ToBoundingBox(modelAABB);
 		}
 
 	private:
@@ -245,32 +243,39 @@ export {
 			path FilePath;
 			shared_ptr<Texture> Resource;
 
-			bool IsSameAs(bool isEmbedded, const path& filePath) const { return IsEmbedded == isEmbedded && (IsEmbedded ? FilePath == filePath : AreSamePath(FilePath, filePath)); }
+			bool IsSameAs(bool isEmbedded, const path& filePath) const {
+				return IsEmbedded == isEmbedded && (IsEmbedded ? FilePath == filePath : AreSamePath(FilePath, filePath));
+			}
 		};
 
-		shared_ptr<Mesh> ProcessMesh(const path& modelFilePath, const aiScene& scene, const aiMatrix4x4& transform, aiMesh& mesh, vector<LoadedTexture>& loadedTextures, ID3D12Device* pDevice, ResourceUploadBatch& resourceUploadBatch, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) {
+		shared_ptr<Mesh> ProcessMesh(const path& modelFilePath, const aiScene& scene, aiMesh& mesh, vector<LoadedTexture>& loadedTextures, ID3D12Device* pDevice, ResourceUploadBatch& resourceUploadBatch, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) {
 			if (mesh.mNumVertices < 3) return nullptr;
+
 			vector<Mesh::VertexType> vertices;
 			vertices.reserve(mesh.mNumVertices);
-			mesh.mAABB = { aiVector3D(numeric_limits<float>::max()), -aiVector3D(numeric_limits<float>::max()) };
+
+			mesh.mAABB = InitializeAABB();
+
 			for (const auto i : views::iota(0u, mesh.mNumVertices)) {
 				auto& vertex = vertices.emplace_back();
 				if (mesh.HasPositions()) {
-					auto position = mesh.mVertices[i];
+					const auto& position = mesh.mVertices[i];
+
 					vertex.Position = reinterpret_cast<const XMFLOAT3&>(position);
-					position = transform * position;
-					if (position.x < mesh.mAABB.mMin.x) mesh.mAABB.mMin.x = position.x;
-					else if (position.x > mesh.mAABB.mMax.x) mesh.mAABB.mMax.x = position.x;
-					if (position.y < mesh.mAABB.mMin.y) mesh.mAABB.mMin.y = position.y;
-					else if (position.y > mesh.mAABB.mMax.y) mesh.mAABB.mMax.y = position.y;
-					if (position.z < mesh.mAABB.mMin.z) mesh.mAABB.mMin.z = position.z;
-					else if (position.z > mesh.mAABB.mMax.z) mesh.mAABB.mMax.z = position.z;
+
+					auto& AABB = mesh.mAABB;
+					AABB.mMin.x = ::min(AABB.mMin.x, position.x);
+					AABB.mMin.y = ::min(AABB.mMin.y, position.y);
+					AABB.mMin.z = ::min(AABB.mMin.z, position.z);
+					AABB.mMax.x = ::max(AABB.mMax.x, position.x);
+					AABB.mMax.y = ::max(AABB.mMax.y, position.y);
+					AABB.mMax.z = ::max(AABB.mMax.z, position.z);
 				}
 				if (mesh.HasNormals()) {
 					vertex.Normal = reinterpret_cast<const XMFLOAT2&>(EncodeUnitVector(reinterpret_cast<const float3&>(mesh.mNormals[i]), true));
 				}
 				if (mesh.HasTextureCoords(0)) {
-					vertex.TextureCoordinate = float2_to_sfloat_16_16(reinterpret_cast<const float2&>(mesh.mTextureCoords[0][i]));
+					vertex.TextureCoordinate = float2_to_float16_t2(reinterpret_cast<const float2&>(mesh.mTextureCoords[0][i])).xy;
 				}
 				if (mesh.HasTangentsAndBitangents()) {
 					vertex.Tangent = reinterpret_cast<const XMFLOAT2&>(EncodeUnitVector(reinterpret_cast<const float3&>(mesh.mTangents[i]), true));
@@ -325,8 +330,7 @@ export {
 				material.Get(AI_MATKEY_METALLIC_FACTOR, _material.Metallic);
 				material.Get(AI_MATKEY_ROUGHNESS_FACTOR, _material.Roughness);
 				if (material.Get(AI_MATKEY_TRANSMISSION_FACTOR, _material.Transmission) != AI_SUCCESS
-					&& material.Get(AI_MATKEY_OPACITY, _material.Transmission) == AI_SUCCESS)
-				{
+					&& material.Get(AI_MATKEY_OPACITY, _material.Transmission) == AI_SUCCESS) {
 					_material.Transmission = 1 - _material.Transmission;
 				}
 				material.Get(AI_MATKEY_REFRACTI, _material.IOR);

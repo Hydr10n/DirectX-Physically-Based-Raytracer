@@ -442,7 +442,6 @@ private:
 
 	void CreateWindowSizeDependentResources() {
 		const auto device = m_deviceResources->GetDevice();
-		const auto commandList = m_deviceResources->GetCommandList();
 
 		const auto outputSize = GetOutputSize();
 
@@ -472,7 +471,7 @@ private:
 			CreateTexture(TextureNames::NormalRoughness, NRD::ToDXGIFormat(GetLibraryDesc().normalEncoding), ResourceDescriptorIndex::RNormalRoughness, ResourceDescriptorIndex::RWNormalRoughness);
 
 			if (m_NRD = make_unique<NRD>(
-				device, m_deviceResources->GetCommandQueue(), commandList,
+				device, m_deviceResources->GetCommandQueue(), m_deviceResources->GetCommandList(),
 				static_cast<uint16_t>(outputSize.cx), static_cast<uint16_t>(outputSize.cy),
 				m_deviceResources->GetBackBufferCount(),
 				initializer_list<DenoiserDesc>{
@@ -614,9 +613,10 @@ private:
 	}
 
 	void OnRenderSizeChanged() {
+		const auto outputSize = GetOutputSize();
+
 		m_resetHistory = true;
 
-		const auto outputSize = GetOutputSize();
 		m_haltonSamplePattern = HaltonSamplePattern(static_cast<UINT>(8 * (static_cast<float>(outputSize.cx) / static_cast<float>(m_renderSize.x)) * (static_cast<float>(outputSize.cy) / static_cast<float>(m_renderSize.y))));
 
 		{
@@ -1143,17 +1143,13 @@ private:
 
 					m_SHARC->GPUBuffers.Camera = m_GPUBuffers.Camera.get();
 
-					m_raytracing->Render(
-						commandList,
-						scene,
-						*m_SHARC,
-						{
-							.DownscaleFactor = raytracingSettings.RTXGI.SHARC.DownscaleFactor,
-							.SceneScale = raytracingSettings.RTXGI.SHARC.SceneScale,
-							.RoughnessThreshold = raytracingSettings.RTXGI.SHARC.RoughnessThreshold,
-							.IsHashGridVisualizationEnabled = raytracingSettings.RTXGI.SHARC.IsHashGridVisualizationEnabled
-						}
-					);
+					Raytracing::SHARCSettings SHARCSettings{
+						.DownscaleFactor = raytracingSettings.RTXGI.SHARC.DownscaleFactor,
+						.RoughnessThreshold = raytracingSettings.RTXGI.SHARC.RoughnessThreshold,
+						.IsHashGridVisualizationEnabled = raytracingSettings.RTXGI.SHARC.IsHashGridVisualizationEnabled
+					};
+					SHARCSettings.SceneScale = raytracingSettings.RTXGI.SHARC.SceneScale;
+					m_raytracing->Render(commandList, scene, *m_SHARC, SHARCSettings);
 
 					swap(m_SHARC->GPUBuffers.PreviousVoxelData, m_SHARC->GPUBuffers.VoxelData);
 				}
@@ -1230,14 +1226,15 @@ private:
 	}
 
 	void SetSuperResolutionOptions() {
-		const auto outputSize = m_deviceResources->GetOutputSize();
+		const auto outputSize = GetOutputSize();
 
 		const auto SelectSuperResolutionMode = [&] {
 			if (g_graphicsSettings.PostProcessing.SuperResolution.Mode != SuperResolutionMode::Auto) return g_graphicsSettings.PostProcessing.SuperResolution.Mode;
-			const auto minValue = min(outputSize.cx, outputSize.cy);
-			if (minValue <= 720) return SuperResolutionMode::Native;
-			if (minValue <= 1440) return SuperResolutionMode::Quality;
-			if (minValue <= 2160) return SuperResolutionMode::Performance;
+			const auto pixelCount = outputSize.cx * outputSize.cy;
+			if (pixelCount <= 1280 * 800) return SuperResolutionMode::Native;
+			if (pixelCount <= 1920 * 1200) return SuperResolutionMode::Quality;
+			if (pixelCount <= 2560 * 1600) return SuperResolutionMode::Balanced;
+			if (pixelCount <= 3840 * 2400) return SuperResolutionMode::Performance;
 			return SuperResolutionMode::UltraPerformance;
 		};
 
@@ -1334,7 +1331,9 @@ private:
 
 		ProcessToneMapping(*inColor);
 
-		if (isNRDEnabled && postProcessingSettings.NRD.IsValidationOverlayEnabled) ProcessAlphaBlending(*m_textures.at(TextureNames::Validation));
+		if (isNRDEnabled && postProcessingSettings.NRD.IsValidationOverlayEnabled) {
+			ProcessAlphaBlending(*m_textures.at(TextureNames::Validation));
+		}
 	}
 
 	void PrepareStreamline() {
@@ -1369,7 +1368,8 @@ private:
 			& baseColorMetalness = *m_textures.at(TextureNames::BaseColorMetalness),
 			& normalRoughness = *m_textures.at(TextureNames::NormalRoughness),
 			& denoisedDiffuse = *m_textures.at(TextureNames::DenoisedDiffuse),
-			& denoisedSpecular = *m_textures.at(TextureNames::DenoisedSpecular);
+			& denoisedSpecular = *m_textures.at(TextureNames::DenoisedSpecular),
+			& color = *m_textures.at(TextureNames::Color);
 
 		{
 			m_NRD->NewFrame();
@@ -1388,7 +1388,6 @@ private:
 			const auto outputSize = GetOutputSize();
 			CommonSettings commonSettings{
 				.motionVectorScale{ 1 / static_cast<float>(m_renderSize.x), 1 / static_cast<float>(m_renderSize.y), 1 },
-				.cameraJitter{ m_camera.Jitter.x, m_camera.Jitter.y },
 				.resourceSize{ static_cast<uint16_t>(outputSize.cx), static_cast<uint16_t>(outputSize.cy) },
 				.rectSize{ static_cast<uint16_t>(m_renderSize.x), static_cast<uint16_t>(m_renderSize.y) },
 				.frameIndex = m_stepTimer.GetFrameCount() - 1,
@@ -1400,6 +1399,7 @@ private:
 			reinterpret_cast<XMFLOAT4X4&>(commonSettings.viewToClipMatrixPrev) = m_camera.PreviousViewToProjection;
 			reinterpret_cast<XMFLOAT4X4&>(commonSettings.worldToViewMatrix) = m_cameraController.GetWorldToView();
 			reinterpret_cast<XMFLOAT4X4&>(commonSettings.worldToViewMatrixPrev) = m_camera.PreviousWorldToView;
+			reinterpret_cast<XMFLOAT2&>(commonSettings.cameraJitter) = m_camera.Jitter;
 			ranges::copy(commonSettings.cameraJitter, commonSettings.cameraJitterPrev);
 			ranges::copy(commonSettings.resourceSize, commonSettings.resourceSizePrev);
 			ranges::copy(commonSettings.rectSize, commonSettings.rectSizePrev);
@@ -1439,7 +1439,7 @@ private:
 			.NormalRoughness = &normalRoughness,
 			.DenoisedDiffuse = &denoisedDiffuse,
 			.DenoisedSpecular = &denoisedSpecular,
-			.Color = m_textures.at(TextureNames::Color).get()
+			.Color = &color
 		};
 
 		m_denoisedComposition->Process(commandList, { .RenderSize = m_renderSize, .NRDDenoiser = NRDSettings.Denoiser });
