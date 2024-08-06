@@ -275,7 +275,7 @@ export {
 					vertex.Normal = reinterpret_cast<const XMFLOAT2&>(EncodeUnitVector(reinterpret_cast<const float3&>(mesh.mNormals[i]), true));
 				}
 				if (mesh.HasTextureCoords(0)) {
-					vertex.TextureCoordinate = float2_to_float16_t2(reinterpret_cast<const float2&>(mesh.mTextureCoords[0][i])).xy;
+					vertex.TextureCoordinate = reinterpret_cast<const uint32_t&>(float2_to_float16_t2(reinterpret_cast<const float2&>(mesh.mTextureCoords[0][i])));
 				}
 				if (mesh.HasTangentsAndBitangents()) {
 					vertex.Tangent = reinterpret_cast<const XMFLOAT2&>(EncodeUnitVector(reinterpret_cast<const float3&>(mesh.mTangents[i]), true));
