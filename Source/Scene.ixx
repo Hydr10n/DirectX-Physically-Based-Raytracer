@@ -323,6 +323,7 @@ export {
 					for (const auto& meshNode : renderObject.Model.MeshNodes) {
 						const auto& instanceData = m_instanceData[instanceIndex++];
 						auto& instanceDesc = instanceDescs.emplace_back(D3D12_RAYTRACING_INSTANCE_DESC{
+							.InstanceID = instanceData.FirstGeometryIndex,
 							.InstanceMask = renderObject.IsVisible ? ~0u : 0,
 							.InstanceContributionToHitGroupIndex = instanceData.FirstGeometryIndex,
 							.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE,
