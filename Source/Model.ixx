@@ -1,7 +1,7 @@
 module;
 
+#include <array>
 #include <filesystem>
-#include <map>
 #include <ranges>
 
 #include "assimp/GltfMaterial.h"
@@ -19,7 +19,7 @@ module;
 export module Model;
 
 import CommandList;
-import DescriptorHeap;
+import DeviceContext;
 import ErrorHelpers;
 import Event;
 import GPUBuffer;
@@ -62,10 +62,7 @@ export {
 
 		string Name;
 
-		shared_ptr<DefaultBuffer<VertexType>> Vertices;
-		shared_ptr<DefaultBuffer<IndexType>> Indices;
-		shared_ptr<DefaultBuffer<SkeletalVertexType>> SkeletalVertices;
-		shared_ptr<DefaultBuffer<XMFLOAT3>> MotionVectors;
+		shared_ptr<GPUBuffer> Vertices, Indices, SkeletalVertices, MotionVectors;
 
 		bool HasTangents{};
 
@@ -104,22 +101,21 @@ export {
 
 		BoneInfoDictionary BoneInfo;
 
-		shared_ptr<UploadBuffer<XMFLOAT3X4>> SkeletalTransforms;
+		shared_ptr<GPUBuffer> SkeletalTransforms;
 
 		vector<Material> Materials;
-		vector<map<TextureMapType, shared_ptr<Texture>>> Textures;
+		vector<array<shared_ptr<Texture>, to_underlying(TextureMapType::_2DCount)>> Textures;
 
 		Model() = default;
 
-		Model(const Model& source, ID3D12Device* pDevice, ID3D12CommandQueue* pCommandQueue, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) {
+		Model(const Model& source, CommandList& commandList) {
 			if (!source.SkeletalTransforms) {
 				*this = source;
 
 				return;
 			}
 
-			CommandList commandList(pDevice);
-			commandList.Begin();
+			const auto& deviceContext = commandList.GetDeviceContext();
 
 			MeshNodes.reserve(size(source.MeshNodes));
 			for (const auto& meshNode : source.MeshNodes) {
@@ -137,14 +133,14 @@ export {
 							const auto newMesh = make_shared<Mesh>();
 
 							{
-								const auto CopyBuffer = [&]<typename T>(shared_ptr<T>&destination, const shared_ptr<T>&source, bool isVertex) {
-									destination = make_shared<T>(*source, isVertex ? commandList.GetNative() : nullptr);
-									descriptorIndex = descriptorHeap.Allocate(1, descriptorIndex);
-									if (isVertex) destination->CreateRawSRV(descriptorHeap, descriptorIndex - 1);
-									else destination->CreateStructuredSRV(descriptorHeap, descriptorIndex - 1);
+								const auto CopyBuffer = [&]<typename T>(auto & destination, const auto & source, bool isVertex) {
+									destination = GPUBuffer::CreateDefault<T>(deviceContext, source->GetCapacity());
+									destination->CreateSRV(isVertex ? BufferSRVType::Raw : BufferSRVType::Structured);
+									commandList.Copy(*destination, *source);
+									commandList.SetState(*destination, isVertex ? D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER : D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 								};
-								CopyBuffer(newMesh->Vertices, mesh->Vertices, true);
-								CopyBuffer(newMesh->MotionVectors, mesh->MotionVectors, false);
+								CopyBuffer.operator() < Mesh::VertexType > (newMesh->Vertices, mesh->Vertices, true);
+								CopyBuffer.operator() < XMFLOAT3 > (newMesh->MotionVectors, mesh->MotionVectors, false);
 							}
 
 							newMesh->Name = mesh->Name;
@@ -168,9 +164,7 @@ export {
 				else MeshNodes.emplace_back(meshNode);
 			}
 
-			commandList.End(pCommandQueue).get();
-
-			SkeletalTransforms = make_shared<UploadBuffer<XMFLOAT3X4>>(*source.SkeletalTransforms);
+			SkeletalTransforms = GPUBuffer::CreateDefault<XMFLOAT3X4>(deviceContext, source.SkeletalTransforms->GetCapacity());
 
 			Name = source.Name;
 			BoneInfo = source.BoneInfo;
@@ -178,7 +172,7 @@ export {
 			Textures = source.Textures;
 		}
 
-		void Load(const path& filePath, ID3D12Device* pDevice, ResourceUploadBatch& resourceUploadBatch, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) {
+		void Load(const path& filePath, CommandList& commandList, ResourceUploadBatch& resourceUploadBatch) {
 			if (empty(filePath)) throw invalid_argument("Model file path cannot be empty");
 
 			Importer importer;
@@ -188,6 +182,8 @@ export {
 			}
 
 			Name = scene->mName.C_Str();
+
+			const auto& deviceContext = commandList.GetDeviceContext();
 
 			auto modelAABB = InitializeAABB();
 
@@ -216,7 +212,7 @@ export {
 					meshNode->Meshes.reserve(node.mNumMeshes);
 					for (const auto i : views::iota(0u, node.mNumMeshes)) {
 						auto& mesh = *scene->mMeshes[node.mMeshes[i]];
-						if (const auto _mesh = ProcessMesh(filePath, *scene, mesh, loadedTextures, pDevice, resourceUploadBatch, descriptorHeap, descriptorIndex)) {
+						if (const auto _mesh = ProcessMesh(filePath, *scene, mesh, loadedTextures, commandList, resourceUploadBatch)) {
 							meshNode->Meshes.emplace_back(_mesh);
 
 							MergeAABB(meshAABB, mesh.mAABB);
@@ -234,7 +230,9 @@ export {
 			};
 			ProcessNode(*scene->mRootNode);
 
-			if (const auto count = size(BoneInfo)) SkeletalTransforms = make_shared<UploadBuffer<XMFLOAT3X4>>(pDevice, count);
+			if (const auto size = ::size(BoneInfo)) {
+				SkeletalTransforms = GPUBuffer::CreateDefault<XMFLOAT3X4>(deviceContext, size);
+			}
 		}
 
 	private:
@@ -248,7 +246,7 @@ export {
 			}
 		};
 
-		shared_ptr<Mesh> ProcessMesh(const path& modelFilePath, const aiScene& scene, aiMesh& mesh, vector<LoadedTexture>& loadedTextures, ID3D12Device* pDevice, ResourceUploadBatch& resourceUploadBatch, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) {
+		shared_ptr<Mesh> ProcessMesh(const path& modelFilePath, const aiScene& scene, aiMesh& mesh, vector<LoadedTexture>& loadedTextures, CommandList& commandList, ResourceUploadBatch& resourceUploadBatch) {
 			if (mesh.mNumVertices < 3) return nullptr;
 
 			vector<Mesh::VertexType> vertices;
@@ -287,28 +285,32 @@ export {
 			if (indexCount % 3 != 0) return nullptr;
 			vector<Mesh::IndexType> indices;
 			indices.reserve(indexCount);
-			for (const auto i : views::iota(0u, mesh.mNumFaces)) for (const auto j : views::iota(0u, mesh.mFaces[i].mNumIndices)) indices.emplace_back(mesh.mFaces[i].mIndices[j]);
+			for (const auto i : views::iota(0u, mesh.mNumFaces)) {
+				for (const auto j : views::iota(0u, mesh.mFaces[i].mNumIndices)) {
+					indices.emplace_back(mesh.mFaces[i].mIndices[j]);
+				}
+			}
 
 			const auto _mesh = make_shared<Mesh>();
 
 			_mesh->Name = mesh.mName.C_Str();
 
+			const auto& deviceContext = commandList.GetDeviceContext();
+
 			{
-				const auto CreateBuffer = [&]<typename T>(shared_ptr<T>&buffer, const auto & data, D3D12_RESOURCE_STATES afterState, bool isStructuredSRV = true, bool hasSRV = true) {
-					buffer = make_shared<T>(pDevice, resourceUploadBatch, data, afterState);
-					if (hasSRV) {
-						descriptorIndex = descriptorHeap.Allocate(1, descriptorIndex);
-						if (isStructuredSRV) buffer->CreateStructuredSRV(descriptorHeap, descriptorIndex - 1);
-						else buffer->CreateRawSRV(descriptorHeap, descriptorIndex - 1);
-					}
+				const auto CreateBuffer = [&]<typename T>(auto & buffer, const vector<T>&data, D3D12_RESOURCE_STATES afterState, bool isStructuredSRV = true, bool hasSRV = true) {
+					buffer = GPUBuffer::CreateDefault<T>(deviceContext, size(data));
+					if (hasSRV) buffer->CreateSRV(isStructuredSRV ? BufferSRVType::Structured : BufferSRVType::Raw);
+					commandList.Write(*buffer, data);
+					commandList.SetState(*buffer, afterState);
 				};
 
 				CreateBuffer(_mesh->Vertices, vertices, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, false);
 				CreateBuffer(_mesh->Indices, indices, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 
 				if (mesh.HasBones()) {
-					CreateBuffer(_mesh->SkeletalVertices, GetBones(vertices, mesh), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, false, false);
-					CreateBuffer(_mesh->MotionVectors, vector<XMFLOAT3>(size(vertices)), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+					CreateBuffer(_mesh->SkeletalVertices, GetBones(vertices, mesh), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, false, false);
+					CreateBuffer(_mesh->MotionVectors, vector<XMFLOAT3>(size(vertices)), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				}
 			}
 
@@ -374,15 +376,13 @@ export {
 						const auto embeddedTexture = scene.GetEmbeddedTexture(filePath.C_Str());
 						const auto isEmbedded = embeddedTexture != nullptr;
 						if (!isEmbedded) textureFilePath = path(modelFilePath).replace_filename(textureFilePath);
-						auto& texture = textures[textureMapType];
+						auto& texture = textures[to_underlying(textureMapType)];
 						if (const auto pLoadedTexture = ranges::find_if(loadedTextures, [&](const auto& value) { return value.IsSameAs(isEmbedded, textureFilePath); });
 							pLoadedTexture == cend(loadedTextures)) {
 							if (isEmbedded) {
-								texture = LoadTexture(embeddedTexture->achFormatHint, embeddedTexture->pcData, embeddedTexture->mHeight ? embeddedTexture->mWidth * embeddedTexture->mHeight * 4 : embeddedTexture->mWidth, pDevice, resourceUploadBatch, descriptorHeap, descriptorIndex);
+								texture = LoadTexture(embeddedTexture->achFormatHint, embeddedTexture->pcData, embeddedTexture->mHeight ? embeddedTexture->mWidth * embeddedTexture->mHeight * 4 : embeddedTexture->mWidth, deviceContext, resourceUploadBatch);
 							}
-							else {
-								texture = LoadTexture(textureFilePath, pDevice, resourceUploadBatch, descriptorHeap, descriptorIndex);
-							}
+							else texture = LoadTexture(textureFilePath, deviceContext, resourceUploadBatch);
 
 							loadedTextures.emplace_back(isEmbedded, textureFilePath, texture);
 						}
@@ -437,13 +437,18 @@ export {
 }
 
 struct ModelDictionaryLoader {
-	void operator()(Model& resource, const path& filePath, ID3D12Device* pDevice, ID3D12CommandQueue* pCommandQueue, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) const {
-		ResourceUploadBatch resourceUploadBatch(pDevice);
+	void operator()(Model& resource, const path& filePath, const DeviceContext& deviceContext) const {
+		CommandList commandList(deviceContext);
+		commandList.Begin();
+
+		ResourceUploadBatch resourceUploadBatch(deviceContext.Device);
 		resourceUploadBatch.Begin();
 
-		resource.Load(filePath, pDevice, resourceUploadBatch, descriptorHeap, descriptorIndex);
+		resource.Load(filePath, commandList, resourceUploadBatch);
 
-		resourceUploadBatch.End(pCommandQueue).get();
+		resourceUploadBatch.End(deviceContext.CommandQueue).get();
+
+		commandList.End();
 	}
 };
 

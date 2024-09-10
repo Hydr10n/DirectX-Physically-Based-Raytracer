@@ -206,6 +206,8 @@ export {
 	};
 }
 
-struct AnimationCollectionDictionaryLoader { void operator()(AnimationCollection& resource, const path& filePath) const { resource.Load(filePath); } };
+struct AnimationCollectionDictionaryLoader {
+	void operator()(AnimationCollection& resource, const path& filePath) const { resource.Load(filePath); }
+};
 
 export using AnimationCollectionDictionary = ResourceDictionary<string, AnimationCollection, AnimationCollectionDictionaryLoader>;

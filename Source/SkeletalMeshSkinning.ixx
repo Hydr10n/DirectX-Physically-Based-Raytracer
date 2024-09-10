@@ -8,10 +8,10 @@ module;
 
 export module SkeletalMeshSkinning;
 
+import CommandList;
+import DeviceContext;
 import ErrorHelpers;
 import GPUBuffer;
-import Model;
-import Vertex;
 
 using namespace DirectX;
 using namespace ErrorHelpers;
@@ -19,47 +19,44 @@ using namespace Microsoft::WRL;
 using namespace std;
 
 export struct SkeletalMeshSkinning {
-	struct {
-		DefaultBuffer<VertexPositionNormalTangentBones>* SkeletalVertices;
-		UploadBuffer<XMFLOAT3X4>* SkeletalTransforms;
-		DefaultBuffer<Mesh::VertexType>* Vertices;
-		DefaultBuffer<XMFLOAT3>* MotionVectors;
-	} GPUBuffers{};
+	struct { GPUBuffer* SkeletalVertices, * SkeletalTransforms, * Vertices, * MotionVectors; } GPUBuffers{};
 
 	SkeletalMeshSkinning(const SkeletalMeshSkinning&) = delete;
 	SkeletalMeshSkinning& operator=(const SkeletalMeshSkinning&) = delete;
 
-	explicit SkeletalMeshSkinning(ID3D12Device* pDevice) noexcept(false) {
+	explicit SkeletalMeshSkinning(const DeviceContext& deviceContext) noexcept(false) {
 		constexpr D3D12_SHADER_BYTECODE ShaderByteCode{ g_SkeletalMeshSkinning_dxil, size(g_SkeletalMeshSkinning_dxil) };
 
-		ThrowIfFailed(pDevice->CreateRootSignature(0, ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&m_rootSignature)));
+		ThrowIfFailed(deviceContext.Device->CreateRootSignature(0, ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&m_rootSignature)));
 
 		const D3D12_COMPUTE_PIPELINE_STATE_DESC pipelineStateDesc{ .pRootSignature = m_rootSignature.Get(), .CS = ShaderByteCode };
-		ThrowIfFailed(pDevice->CreateComputePipelineState(&pipelineStateDesc, IID_PPV_ARGS(&m_pipelineState)));
+		ThrowIfFailed(deviceContext.Device->CreateComputePipelineState(&pipelineStateDesc, IID_PPV_ARGS(&m_pipelineState)));
 		m_pipelineState->SetName(L"SkeletalMeshSkinning");
 	}
 
-	void Prepare(ID3D12GraphicsCommandList* pCommandList) {
-		pCommandList->SetComputeRootSignature(m_rootSignature.Get());
-		pCommandList->SetPipelineState(m_pipelineState.Get());
+	void Prepare(CommandList& commandList) {
+		commandList->SetComputeRootSignature(m_rootSignature.Get());
+		commandList->SetPipelineState(m_pipelineState.Get());
 	}
 
-	void Process(ID3D12GraphicsCommandList* pCommandList) {
-		const auto vertexCount = static_cast<UINT>(GPUBuffers.Vertices->GetCount());
+	void Process(CommandList& commandList) {
+		const auto vertexCount = static_cast<UINT>(GPUBuffers.Vertices->GetCapacity());
 
-		pCommandList->SetComputeRoot32BitConstant(0, vertexCount, 0);
-		pCommandList->SetComputeRootShaderResourceView(1, GPUBuffers.SkeletalVertices->GetNative()->GetGPUVirtualAddress());
-		pCommandList->SetComputeRootShaderResourceView(2, GPUBuffers.SkeletalTransforms->GetNative()->GetGPUVirtualAddress());
-		pCommandList->SetComputeRootUnorderedAccessView(3, GPUBuffers.Vertices->GetNative()->GetGPUVirtualAddress());
-		pCommandList->SetComputeRootUnorderedAccessView(4, GPUBuffers.MotionVectors->GetNative()->GetGPUVirtualAddress());
+		commandList.SetState(*GPUBuffers.SkeletalVertices, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+		commandList.SetState(*GPUBuffers.SkeletalTransforms, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+		commandList.SetState(*GPUBuffers.Vertices, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		commandList.SetState(*GPUBuffers.MotionVectors, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-		pCommandList->Dispatch((vertexCount + 255) / 256, 1, 1);
+		commandList->SetComputeRoot32BitConstant(0, vertexCount, 0);
+		commandList->SetComputeRootShaderResourceView(1, GPUBuffers.SkeletalVertices->GetNative()->GetGPUVirtualAddress());
+		commandList->SetComputeRootShaderResourceView(2, GPUBuffers.SkeletalTransforms->GetNative()->GetGPUVirtualAddress());
+		commandList->SetComputeRootUnorderedAccessView(3, GPUBuffers.Vertices->GetNative()->GetGPUVirtualAddress());
+		commandList->SetComputeRootUnorderedAccessView(4, GPUBuffers.MotionVectors->GetNative()->GetGPUVirtualAddress());
 
-		const auto barriers = {
-			CD3DX12_RESOURCE_BARRIER::UAV(*GPUBuffers.Vertices),
-			CD3DX12_RESOURCE_BARRIER::UAV(*GPUBuffers.MotionVectors)
-		};
-		pCommandList->ResourceBarrier(static_cast<UINT>(size(barriers)), data(barriers));
+		commandList->Dispatch((vertexCount + 255) / 256, 1, 1);
+
+		commandList.SetState(*GPUBuffers.Vertices, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+		commandList.SetState(*GPUBuffers.MotionVectors, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	}
 
 private:

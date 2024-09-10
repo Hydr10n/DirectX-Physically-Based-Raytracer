@@ -10,6 +10,9 @@ module;
 
 export module ResourceHelpers;
 
+import ErrorHelpers;
+
+using namespace ErrorHelpers;
 using namespace std;
 using namespace std::filesystem;
 
@@ -25,7 +28,7 @@ export namespace ResourceHelpers {
 	struct ResourceDictionary : unordered_map<KeyType, shared_ptr<ResourceType>> {
 		template <typename... Args>
 		void Load(const unordered_map<KeyType, path>& descs, bool ignoreLoaded, size_t threadCount, Args&&... args) {
-			if (!threadCount) throw invalid_argument("Thread count cannot be 0");
+			if (!threadCount) Throw<out_of_range>("Thread count cannot be 0");
 
 			vector<thread> threads;
 

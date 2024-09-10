@@ -8,6 +8,7 @@
                 "openexr"
             ]
         },
+        "directx12-agility",
         "directxtk12",
         {
             "name": "imgui",

@@ -14,7 +14,7 @@ export module Scene;
 
 import Animation;
 import CommandList;
-import DescriptorHeap;
+import DeviceContext;
 import Event;
 import Math;
 import Model;
@@ -93,29 +93,31 @@ export {
 
 		vector<RenderObject> RenderObjects;
 
-		Scene(ID3D12Device5* pDevice, ID3D12CommandQueue* pCommandQueue) noexcept(false) : m_device(pDevice), m_commandQueue(pCommandQueue), m_commandList(pDevice), m_skeletalMeshSkinning(pDevice), m_observer(*this) {}
+		Scene(const DeviceContext& deviceContext) : m_commandList(deviceContext), m_skeletalMeshSkinning(deviceContext), m_observer(*this) {}
 
 		virtual bool IsStatic() const { return false; }
 
 		virtual void Tick(double elapsedSeconds, const GamePad::ButtonStateTracker& gamepadStateTracker, const Keyboard::KeyboardStateTracker& keyboardStateTracker, const Mouse::ButtonStateTracker& mouseStateTracker) {}
 
-		void Load(const SceneDesc& sceneDesc, DescriptorHeapEx& descriptorHeap, _Inout_ UINT& descriptorIndex) {
+		void Load(const SceneDesc& sceneDesc) {
 			reinterpret_cast<SceneBase&>(*this) = sceneDesc;
 
-			{
-				ResourceUploadBatch resourceUploadBatch(m_device);
-				resourceUploadBatch.Begin();
+			const auto& deviceContext = m_commandList.GetDeviceContext();
 
+			m_commandList.Begin();
+
+			ResourceUploadBatch resourceUploadBatch(deviceContext.Device);
+			resourceUploadBatch.Begin();
+
+			{
 				if (!empty(sceneDesc.EnvironmentLightTexture.FilePath)) {
-					EnvironmentLightTexture.Texture = LoadTexture(ResolveResourcePath(sceneDesc.EnvironmentLightTexture.FilePath), m_device, resourceUploadBatch, descriptorHeap, descriptorIndex);
+					EnvironmentLightTexture.Texture = LoadTexture(ResolveResourcePath(sceneDesc.EnvironmentLightTexture.FilePath), deviceContext, resourceUploadBatch);
 					EnvironmentLightTexture.Transform = sceneDesc.EnvironmentLightTexture.Transform;
 				}
 				if (!empty(sceneDesc.EnvironmentTexture.FilePath)) {
-					EnvironmentTexture.Texture = LoadTexture(ResolveResourcePath(sceneDesc.EnvironmentTexture.FilePath), m_device, resourceUploadBatch, descriptorHeap, descriptorIndex);
+					EnvironmentTexture.Texture = LoadTexture(ResolveResourcePath(sceneDesc.EnvironmentTexture.FilePath), deviceContext, resourceUploadBatch);
 					EnvironmentTexture.Transform = sceneDesc.EnvironmentTexture.Transform;
 				}
-
-				resourceUploadBatch.End(m_commandQueue).get();
 			}
 
 			{
@@ -130,7 +132,7 @@ export {
 					}
 				}
 
-				Models.Load(modelDescs, true, 8, m_device, m_commandQueue, descriptorHeap, descriptorIndex);
+				Models.Load(modelDescs, true, 8, deviceContext);
 
 				AnimationCollections.Load(animationDescs, true, 8);
 
@@ -139,7 +141,7 @@ export {
 					reinterpret_cast<RenderObjectBase&>(renderObject) = renderObjectDesc;
 
 					if (!empty(renderObjectDesc.Model)) {
-						renderObject.Model = Model(*Models.at(renderObjectDesc.Model), m_device, m_commandQueue, descriptorHeap, descriptorIndex);
+						renderObject.Model = Model(*Models.at(renderObjectDesc.Model), m_commandList);
 					}
 
 					if (!empty(renderObjectDesc.Animation)) {
@@ -150,6 +152,10 @@ export {
 					RenderObjects.emplace_back(renderObject);
 				}
 			}
+
+			resourceUploadBatch.End(deviceContext.CommandQueue).get();
+
+			m_commandList.End();
 
 			Refresh();
 
@@ -203,36 +209,40 @@ export {
 				if (!renderObject.IsVisible) continue;
 
 				const auto& model = renderObject.Model;
-				if (const auto& animationCollection = renderObject.AnimationCollection; !empty(animationCollection) && animationCollection.HasBoneInfo()) {
-					if (const auto& skeletalTransforms = animationCollection[animationCollection.GetSelectedIndex()].GetSkeletalTransforms(); !empty(skeletalTransforms)) {
-						model.SkeletalTransforms->Write(skeletalTransforms);
-					}
+				if (const auto& animationCollection = renderObject.AnimationCollection;
+					!empty(animationCollection) && animationCollection.HasBoneInfo()) {
+					if (const auto& skeletalTransforms = animationCollection[animationCollection.GetSelectedIndex()].GetSkeletalTransforms();
+						!empty(skeletalTransforms)) {
+						auto written = false;
 
-					for (const auto& meshNode : model.MeshNodes) {
-						for (const auto& mesh : meshNode->Meshes) {
-							if (mesh->SkeletalVertices) {
-								if (!prepared) {
-									m_commandList.Begin();
+						for (const auto& meshNode : model.MeshNodes) {
+							for (const auto& mesh : meshNode->Meshes) {
+								if (mesh->SkeletalVertices) {
+									if (!prepared) {
+										m_commandList.Begin();
 
-									m_skeletalMeshSkinning.Prepare(m_commandList);
+										if (!written) m_commandList.Write(*model.SkeletalTransforms, skeletalTransforms);
 
-									prepared = true;
+										m_skeletalMeshSkinning.Prepare(m_commandList);
+
+										prepared = written = true;
+									}
+
+									m_skeletalMeshSkinning.GPUBuffers = {
+										.SkeletalVertices = mesh->SkeletalVertices.get(),
+										.SkeletalTransforms = model.SkeletalTransforms.get(),
+										.Vertices = mesh->Vertices.get(),
+										.MotionVectors = mesh->MotionVectors.get()
+									};
+
+									m_skeletalMeshSkinning.Process(m_commandList);
 								}
-
-								m_skeletalMeshSkinning.GPUBuffers = {
-									.SkeletalVertices = mesh->SkeletalVertices.get(),
-									.SkeletalTransforms = model.SkeletalTransforms.get(),
-									.Vertices = mesh->Vertices.get(),
-									.MotionVectors = mesh->MotionVectors.get()
-								};
-
-								m_skeletalMeshSkinning.Process(m_commandList);
 							}
 						}
 					}
 				}
 			}
-			if (prepared) m_commandList.End(m_commandQueue).get();
+			if (prepared) m_commandList.End();
 		}
 
 		const auto& GetTopLevelAccelerationStructure() const { return *m_topLevelAccelerationStructure; }
@@ -246,7 +256,7 @@ export {
 				if (!updateOnly) {
 					m_bottomLevelAccelerationStructureIDs = {};
 
-					m_accelerationStructureManager = make_unique<DxAccelStructManager>(m_device);
+					m_accelerationStructureManager = make_unique<DxAccelStructManager>(m_commandList.GetDeviceContext().Device);
 					m_accelerationStructureManager->Initialize();
 				}
 
@@ -297,7 +307,9 @@ export {
 
 				if (!empty(newBuildBottomLevelAccelerationStructureInputs)) {
 					m_accelerationStructureManager->PopulateBuildCommandList(m_commandList, data(newBuildBottomLevelAccelerationStructureInputs), size(newBuildBottomLevelAccelerationStructureInputs), newBottomLevelAccelerationStructureIDs);
-					for (UINT i = 0; const auto & meshNode : newMeshNodes) m_bottomLevelAccelerationStructureIDs[meshNode] = newBottomLevelAccelerationStructureIDs[i++];
+					for (UINT i = 0; const auto & meshNode : newMeshNodes) {
+						m_bottomLevelAccelerationStructureIDs[meshNode] = newBottomLevelAccelerationStructureIDs[i++];
+					}
 					m_accelerationStructureManager->PopulateUAVBarriersCommandList(m_commandList, newBottomLevelAccelerationStructureIDs);
 					m_accelerationStructureManager->PopulateCompactionSizeCopiesCommandList(m_commandList, newBottomLevelAccelerationStructureIDs);
 				}
@@ -306,16 +318,18 @@ export {
 					m_accelerationStructureManager->PopulateUAVBarriersCommandList(m_commandList, updatedBottomLevelAccelerationStructureIDs);
 				}
 
-				m_commandList.End(m_commandQueue).get();
+				m_commandList.End();
 			}
 
 			{
 				m_commandList.Begin();
 
-				if (!empty(newBottomLevelAccelerationStructureIDs)) m_accelerationStructureManager->PopulateCompactionCommandList(m_commandList, newBottomLevelAccelerationStructureIDs);
+				if (!empty(newBottomLevelAccelerationStructureIDs)) {
+					m_accelerationStructureManager->PopulateCompactionCommandList(m_commandList, newBottomLevelAccelerationStructureIDs);
+				}
 
 				if (!updateOnly) {
-					m_topLevelAccelerationStructure = make_unique<TopLevelAccelerationStructure>(m_device, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE | D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE);
+					m_topLevelAccelerationStructure = make_unique<TopLevelAccelerationStructure>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE | D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE);
 				}
 				vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
 				instanceDescs.reserve(size(m_instanceData));
@@ -334,16 +348,16 @@ export {
 				}
 				m_topLevelAccelerationStructure->Build(m_commandList, instanceDescs, updateOnly);
 
-				m_commandList.End(m_commandQueue).get();
+				m_commandList.End();
 			}
 
-			if (!empty(newBottomLevelAccelerationStructureIDs)) m_accelerationStructureManager->GarbageCollection(newBottomLevelAccelerationStructureIDs);
+			if (!empty(newBottomLevelAccelerationStructureIDs)) {
+				m_accelerationStructureManager->GarbageCollection(newBottomLevelAccelerationStructureIDs);
+			}
 		}
 
 	private:
-		ID3D12Device5* m_device;
-		ID3D12CommandQueue* m_commandQueue;
-		CommandList<ID3D12GraphicsCommandList4> m_commandList;
+		CommandList m_commandList;
 
 		SkeletalMeshSkinning m_skeletalMeshSkinning;
 
