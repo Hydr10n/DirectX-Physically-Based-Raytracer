@@ -213,7 +213,7 @@ export {
 					!empty(animationCollection) && animationCollection.HasBoneInfo()) {
 					if (const auto& skeletalTransforms = animationCollection[animationCollection.GetSelectedIndex()].GetSkeletalTransforms();
 						!empty(skeletalTransforms)) {
-						auto written = false;
+						auto copied = false;
 
 						for (const auto& meshNode : model.MeshNodes) {
 							for (const auto& mesh : meshNode->Meshes) {
@@ -221,11 +221,11 @@ export {
 									if (!prepared) {
 										m_commandList.Begin();
 
-										if (!written) m_commandList.Write(*model.SkeletalTransforms, skeletalTransforms);
+										if (!copied) m_commandList.Copy(*model.SkeletalTransforms, skeletalTransforms);
 
 										m_skeletalMeshSkinning.Prepare(m_commandList);
 
-										prepared = written = true;
+										prepared = copied = true;
 									}
 
 									m_skeletalMeshSkinning.GPUBuffers = {

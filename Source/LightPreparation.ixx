@@ -96,13 +96,12 @@ export struct LightPreparation {
 			}
 		}
 
-		commandList.Write(lightIndices, _lightIndices);
-		commandList.SetState(lightIndices, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+		commandList.Copy(lightIndices, _lightIndices);
 
 		if (const auto size = ::size(tasks); !m_GPUBuffers.Tasks || size > m_GPUBuffers.Tasks->GetCapacity()) {
 			m_GPUBuffers.Tasks = GPUBuffer::CreateDefault<Task>(commandList.GetDeviceContext(), size);
 		}
-		commandList.Write(*m_GPUBuffers.Tasks, tasks);
+		commandList.Copy(*m_GPUBuffers.Tasks, tasks);
 	}
 
 	void Process(CommandList& commandList) {

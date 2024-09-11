@@ -13,9 +13,6 @@ module;
 #include "directxtk12/SimpleMath.h"
 #include "directxtk12/ResourceUploadBatch.h"
 
-#include "ml.h"
-#include "ml.hlsli"
-
 export module Model;
 
 import CommandList;
@@ -33,7 +30,6 @@ using namespace DirectX;
 using namespace DirectX::SimpleMath;
 using namespace ErrorHelpers;
 using namespace Microsoft::WRL;
-using namespace Packing;
 using namespace ResourceHelpers;
 using namespace std;
 using namespace std::filesystem;
@@ -42,8 +38,10 @@ using namespace TextureHelpers;
 namespace {
 	aiAABB InitializeAABB() { return { aiVector3D(numeric_limits<float>::max()), aiVector3D(-numeric_limits<float>::max()) }; }
 
-	constexpr BoundingBox ToBoundingBox(const aiAABB& AABB) {
-		return { reinterpret_cast<const XMFLOAT3&>((AABB.mMin + AABB.mMax) * 0.5f), reinterpret_cast<const XMFLOAT3&>((AABB.mMax - AABB.mMin) * 0.5f) };
+	auto ToFloat3(const aiVector3D& value) { return reinterpret_cast<const XMFLOAT3&>(value); }
+
+	constexpr BoundingBox ToBoundingBox(const aiAABB& value) {
+		return { ToFloat3((value.mMin + value.mMax) * 0.5f), ToFloat3((value.mMax - value.mMin) * 0.5f) };
 	}
 }
 
@@ -259,7 +257,7 @@ export {
 				if (mesh.HasPositions()) {
 					const auto& position = mesh.mVertices[i];
 
-					vertex.Position = reinterpret_cast<const XMFLOAT3&>(position);
+					vertex.Position = ToFloat3(position);
 
 					auto& AABB = mesh.mAABB;
 					AABB.mMin.x = ::min(AABB.mMin.x, position.x);
@@ -270,13 +268,13 @@ export {
 					AABB.mMax.z = ::max(AABB.mMax.z, position.z);
 				}
 				if (mesh.HasNormals()) {
-					vertex.Normal = reinterpret_cast<const XMFLOAT2&>(EncodeUnitVector(reinterpret_cast<const float3&>(mesh.mNormals[i]), true));
+					vertex.StoreNormal(ToFloat3(mesh.mNormals[i]));
 				}
 				if (mesh.HasTextureCoords(0)) {
-					vertex.TextureCoordinate = reinterpret_cast<const uint32_t&>(float2_to_float16_t2(reinterpret_cast<const float2&>(mesh.mTextureCoords[0][i])));
+					vertex.StoreTextureCoordinate(reinterpret_cast<const XMFLOAT2&>(mesh.mTextureCoords[0][i]));
 				}
 				if (mesh.HasTangentsAndBitangents()) {
-					vertex.Tangent = reinterpret_cast<const XMFLOAT2&>(EncodeUnitVector(reinterpret_cast<const float3&>(mesh.mTangents[i]), true));
+					vertex.StoreTangent(ToFloat3(mesh.mTangents[i]));
 				}
 			}
 
@@ -301,7 +299,7 @@ export {
 				const auto CreateBuffer = [&]<typename T>(auto & buffer, const vector<T>&data, D3D12_RESOURCE_STATES afterState, bool isStructuredSRV = true, bool hasSRV = true) {
 					buffer = GPUBuffer::CreateDefault<T>(deviceContext, size(data));
 					if (hasSRV) buffer->CreateSRV(isStructuredSRV ? BufferSRVType::Structured : BufferSRVType::Raw);
-					commandList.Write(*buffer, data);
+					commandList.Copy(*buffer, data);
 					commandList.SetState(*buffer, afterState);
 				};
 
@@ -328,7 +326,9 @@ export {
 				if (material.Get(AI_MATKEY_BASE_COLOR, color) == AI_SUCCESS || material.Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {
 					_material.BaseColor = reinterpret_cast<const XMFLOAT4&>(color);
 				}
-				if (material.Get(AI_MATKEY_COLOR_EMISSIVE, color) == AI_SUCCESS) _material.EmissiveColor = reinterpret_cast<const XMFLOAT3&>(color);
+				if (material.Get(AI_MATKEY_COLOR_EMISSIVE, color) == AI_SUCCESS) {
+					_material.EmissiveColor = reinterpret_cast<const XMFLOAT3&>(color);
+				}
 				material.Get(AI_MATKEY_METALLIC_FACTOR, _material.Metallic);
 				material.Get(AI_MATKEY_ROUGHNESS_FACTOR, _material.Roughness);
 				if (material.Get(AI_MATKEY_TRANSMISSION_FACTOR, _material.Transmission) != AI_SUCCESS
