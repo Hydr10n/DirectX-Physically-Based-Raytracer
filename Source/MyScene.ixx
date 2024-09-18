@@ -87,6 +87,13 @@ export {
 
 			if (IsStatic()) return;
 
+			Tick(elapsedSeconds);
+
+			Refresh();
+		}
+
+	protected:
+		void Tick(double elapsedSeconds) override {
 			for (auto& renderObject : RenderObjects) {
 				if (!renderObject.IsVisible) continue;
 
@@ -98,8 +105,6 @@ export {
 					if (animation.GetTime() < time) animationCollection.SetSelectedIndex((selectedIndex + 1) % size(animationCollection));
 				}
 			}
-
-			Refresh();
 		}
 
 	private:

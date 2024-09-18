@@ -483,6 +483,8 @@ private:
 			m_camera.FarDepth = m_cameraController.GetFarDepth();
 			m_camera.Jitter = g_graphicsSettings.Camera.IsJitterEnabled ? m_haltonSamplePattern.GetNext() : XMFLOAT2();
 			m_camera.WorldToProjection = m_cameraController.GetWorldToProjection();
+			m_camera.ProjectionToView = m_cameraController.GetProjectionToView();
+			m_camera.ViewToWorld = m_cameraController.GetViewToWorld();
 
 			m_deviceResources->GetCommandList().Copy(*m_GPUBuffers.Camera, initializer_list{ m_camera });
 		}
@@ -523,9 +525,13 @@ private:
 				if (m_resetHistory) ResetHistory();
 
 				if (!m_scene->IsStatic()) {
-					m_scene->SkinSkeletalMeshes();
-					m_scene->CreateAccelerationStructures(true);
+					m_scene->SkinSkeletalMeshes(commandList);
+
+					m_scene->CreateAccelerationStructures(commandList);
+					commandList.CompactAccelerationStructures();
 				}
+
+				m_scene->CollectGarbage();
 
 				RenderScene();
 

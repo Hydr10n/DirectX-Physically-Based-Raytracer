@@ -13,12 +13,13 @@ module;
 #include "directxtk12/SimpleMath.h"
 #include "directxtk12/ResourceUploadBatch.h"
 
+#include "eventpp/callbacklist.h"
+
 export module Model;
 
 import CommandList;
 import DeviceContext;
 import ErrorHelpers;
-import Event;
 import GPUBuffer;
 import Material;
 import ResourceHelpers;
@@ -29,6 +30,7 @@ using namespace Assimp;
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
 using namespace ErrorHelpers;
+using namespace eventpp;
 using namespace Microsoft::WRL;
 using namespace ResourceHelpers;
 using namespace std;
@@ -54,12 +56,11 @@ export {
 	using BoneInfoDictionary = unordered_map<string, BoneInfo>;
 
 	struct Mesh {
+		string Name;
+
 		using VertexType = VertexPositionNormalTextureTangent;
 		using IndexType = UINT32;
 		using SkeletalVertexType = VertexPositionNormalTangentBones;
-
-		string Name;
-
 		shared_ptr<GPUBuffer> Vertices, Indices, SkeletalVertices, MotionVectors;
 
 		bool HasTangents{};
@@ -87,9 +88,10 @@ export {
 
 		Matrix GlobalTransform;
 
-		inline static Event<const MeshNode*> DeleteEvent;
+		using DestroyEvent = CallbackList<void(MeshNode*)>;
+		DestroyEvent OnDestroyed;
 
-		~MeshNode() { DeleteEvent.Raise(this); }
+		~MeshNode() { OnDestroyed(this); }
 	};
 
 	struct Model {

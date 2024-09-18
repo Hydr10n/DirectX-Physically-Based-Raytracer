@@ -25,6 +25,6 @@ export {
 	}
 
 	namespace Math {
-		JSON_CONVERSION_FUNCTIONS(Transform, Translation, Rotation, Scaling);
+		JSON_CONVERSION_FUNCTIONS(AffineTransform, Translation, Rotation, Scaling);
 	}
 }

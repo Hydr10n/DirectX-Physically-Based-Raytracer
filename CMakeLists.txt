@@ -119,6 +119,7 @@ set(packages
 	directx12-agility
 	directxtex
 	directxtk12
+	eventpp
 	imgui
 	nlohmann_json)
 foreach(package ${packages})
@@ -127,6 +128,7 @@ endforeach()
 
 target_link_libraries(${project} PRIVATE
 	assimp::assimp
+	eventpp::eventpp
 	Microsoft::DirectX12-Agility
 	Microsoft::DirectXTex
 	Microsoft::DirectXTK12

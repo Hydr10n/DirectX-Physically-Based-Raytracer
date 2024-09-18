@@ -27,7 +27,7 @@ export namespace ResourceHelpers {
 	template <typename KeyType, typename ResourceType, constructible_from Loader> requires is_class_v<Loader>
 	struct ResourceDictionary : unordered_map<KeyType, shared_ptr<ResourceType>> {
 		template <typename... Args>
-		void Load(const unordered_map<KeyType, path>& descs, bool ignoreLoaded, size_t threadCount, Args&&... args) {
+		void Load(const unordered_map<KeyType, path>& descs, bool keepLoaded, size_t threadCount, Args&&... args) {
 			if (!threadCount) Throw<out_of_range>("Thread count cannot be 0");
 
 			vector<thread> threads;
@@ -69,7 +69,7 @@ export namespace ResourceHelpers {
 						loadedResources.emplace_back(globalThreadIndex, LoadedResource{ .FilePath = filePath, .Resource = &resource });
 					}
 
-					if (!ignoreLoaded || !resource) {
+					if (!keepLoaded || !resource) {
 						resource = make_shared<ResourceType>();
 						Loader()(*resource, filePath, forward<Args>(args)...);
 					}
