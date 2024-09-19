@@ -234,10 +234,10 @@ export {
 				const auto& model = renderObject.Model;
 
 				const auto& animationCollection = renderObject.AnimationCollection;
-				if (empty(animationCollection) && animationCollection.HasBoneInfo()) return;
+				if (empty(animationCollection) || !animationCollection.HasBoneInfo()) continue;
 
 				const auto& skeletalTransforms = animationCollection[animationCollection.GetSelectedIndex()].GetSkeletalTransforms();
-				if (empty(skeletalTransforms)) return;
+				if (empty(skeletalTransforms)) continue;
 
 				auto copied = false;
 

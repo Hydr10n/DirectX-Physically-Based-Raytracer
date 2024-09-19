@@ -30,13 +30,21 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 	- NVIDIA RTX Dynamic Illumination
 		- ReSTIR DI
 			- ReGIR
-				- Cell Size
-				- Cell Visualization
+				- Cell
+					- Size
+					- Visualization
+				- Build Samples
 			- Initial Sampling
 				- Local Light
 					- Mode: Uniform | Power RIS | ReGIR RIS
 					- Samples
 				- BRDF Samples
+			- Temporal Sampling
+				- Bias Correction Mode: Basic | Pairwise | Raytraced
+				- Boiling Filter Strength
+			- Spatial Sampling
+				- Bias Correction Mode: Basic | Pairwise | Raytraced
+				- Samples
 	- NVIDIA RTX Global Illumination
 		- SHARC
 			- Downscale Factor
