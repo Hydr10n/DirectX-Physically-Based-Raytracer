@@ -39,10 +39,10 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 					- Mode: Uniform | Power RIS | ReGIR RIS
 					- Samples
 				- BRDF Samples
-			- Temporal Sampling
+			- Temporal Resampling
 				- Bias Correction Mode: Basic | Pairwise | Raytraced
 				- Boiling Filter Strength
-			- Spatial Sampling
+			- Spatial Resampling
 				- Bias Correction Mode: Basic | Pairwise | Raytraced
 				- Samples
 	- NVIDIA RTX Global Illumination

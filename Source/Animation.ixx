@@ -67,7 +67,9 @@ namespace {
 			else {
 				const auto& key1 = keys[i], & key2 = keys[i + 1];
 				const auto t = static_cast<float>((time - key1.Time) / (key2.Time - key1.Time));
-				if constexpr (is_same_v<T, PositionKey> || is_same_v<T, ScalingKey>) value = Vector3::Lerp(key1.Value, key2.Value, t);
+				if constexpr (is_same_v<T, PositionKey> || is_same_v<T, ScalingKey>) {
+					value = Vector3::Lerp(key1.Value, key2.Value, t);
+				}
 				else if constexpr (is_same_v<T, RotationKey>) value = Quaternion::Slerp(key1.Value, key2.Value, t);
 			}
 			if constexpr (is_same_v<T, PositionKey>) return Matrix::CreateTranslation(value);
@@ -106,7 +108,9 @@ export {
 				const auto transform = (pKeyframeCollection == cend(m_keyframeCollections) ? transformNode.Transform : pKeyframeCollection->second.Interpolate(static_cast<float>(m_time))) * parentTransform;
 
 				m_globalTransforms[transformNode.Name] = transform;
-				if (transformNode.BoneInfo.ID != ~0u) XMStoreFloat3x4(&m_skeletalTransforms[transformNode.BoneInfo.ID], transformNode.BoneInfo.Transform * transform * m_skeletalRootInverseGlobalTransform);
+				if (transformNode.BoneInfo.ID != ~0u) {
+					XMStoreFloat3x4(&m_skeletalTransforms[transformNode.BoneInfo.ID], transformNode.BoneInfo.Transform * transform * m_skeletalRootInverseGlobalTransform);
+				}
 
 				for (const auto& child : transformNode.Children) self(child, transform);
 			};
@@ -139,7 +143,9 @@ export {
 			m_ticksPerSecond = animation.mTicksPerSecond;
 			m_duration = animation.mDuration;
 
-			for (const auto i : views::iota(0u, animation.mNumChannels)) m_keyframeCollections[animation.mChannels[i]->mNodeName.C_Str()] = *animation.mChannels[i];
+			for (const auto i : views::iota(0u, animation.mNumChannels)) {
+				m_keyframeCollections[animation.mChannels[i]->mNodeName.C_Str()] = *animation.mChannels[i];
+			}
 
 			const auto ReadNode = [](this auto& self, const aiNode& node, TransformNode& transformNode) -> void {
 				transformNode.Name = node.mName.C_Str();
@@ -182,7 +188,9 @@ export {
 			Importer importer;
 			importer.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS, ~aiComponent_ANIMATIONS);
 			const auto scene = importer.ReadFile(reinterpret_cast<const char*>(filePath.u8string().c_str()), aiProcess_RemoveComponent | aiProcess_ConvertToLeftHanded);
-			if (scene == nullptr || scene->mRootNode == nullptr) throw runtime_error(format("Assimp: {}", importer.GetErrorString()));
+			if (scene == nullptr || scene->mRootNode == nullptr) {
+				throw runtime_error(format("Assimp: {}", importer.GetErrorString()));
+			}
 
 			Name = scene->mName.C_Str();
 
