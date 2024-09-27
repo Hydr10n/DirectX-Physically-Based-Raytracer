@@ -11,7 +11,6 @@ module;
 
 #include "directxtk12/DirectXHelpers.h"
 #include "directxtk12/SimpleMath.h"
-#include "directxtk12/ResourceUploadBatch.h"
 
 #include "eventpp/callbacklist.h"
 
@@ -104,7 +103,7 @@ export {
 		shared_ptr<GPUBuffer> SkeletalTransforms;
 
 		vector<Material> Materials;
-		vector<array<shared_ptr<Texture>, to_underlying(TextureMapType::_2DCount)>> Textures;
+		vector<array<shared_ptr<Texture>, to_underlying(TextureMapType::Count)>> Textures;
 
 		Model() = default;
 
@@ -172,7 +171,7 @@ export {
 			Textures = source.Textures;
 		}
 
-		void Load(const path& filePath, CommandList& commandList, ResourceUploadBatch& resourceUploadBatch) {
+		void Load(const path& filePath, CommandList& commandList) {
 			if (empty(filePath)) throw invalid_argument("Model file path cannot be empty");
 
 			Importer importer;
@@ -212,7 +211,7 @@ export {
 					meshNode->Meshes.reserve(node.mNumMeshes);
 					for (const auto i : views::iota(0u, node.mNumMeshes)) {
 						auto& mesh = *scene->mMeshes[node.mMeshes[i]];
-						if (const auto _mesh = ProcessMesh(filePath, *scene, mesh, loadedTextures, commandList, resourceUploadBatch)) {
+						if (const auto _mesh = ProcessMesh(commandList, filePath, *scene, mesh, loadedTextures)) {
 							meshNode->Meshes.emplace_back(_mesh);
 
 							MergeAABB(meshAABB, mesh.mAABB);
@@ -246,7 +245,7 @@ export {
 			}
 		};
 
-		shared_ptr<Mesh> ProcessMesh(const path& modelFilePath, const aiScene& scene, aiMesh& mesh, vector<LoadedTexture>& loadedTextures, CommandList& commandList, ResourceUploadBatch& resourceUploadBatch) {
+		shared_ptr<Mesh> ProcessMesh(CommandList& commandList, const path& modelFilePath, const aiScene& scene, aiMesh& mesh, vector<LoadedTexture>& loadedTextures) {
 			if (mesh.mNumVertices < 3) return nullptr;
 
 			vector<Mesh::VertexType> vertices;
@@ -381,10 +380,12 @@ export {
 						auto& texture = textures[to_underlying(textureMapType)];
 						if (const auto pLoadedTexture = ranges::find_if(loadedTextures, [&](const auto& value) { return value.IsSameAs(isEmbedded, textureFilePath); });
 							pLoadedTexture == cend(loadedTextures)) {
+							const auto forceSRGBIfNecessary = textureMapType == TextureMapType::BaseColor || textureMapType == TextureMapType::EmissiveColor;
 							if (isEmbedded) {
-								texture = LoadTexture(embeddedTexture->achFormatHint, embeddedTexture->pcData, embeddedTexture->mHeight ? embeddedTexture->mWidth * embeddedTexture->mHeight * 4 : embeddedTexture->mWidth, deviceContext, resourceUploadBatch);
+								texture = LoadTexture(commandList, embeddedTexture->achFormatHint, embeddedTexture->pcData, embeddedTexture->mHeight ? embeddedTexture->mWidth * embeddedTexture->mHeight * 4 : embeddedTexture->mWidth, forceSRGBIfNecessary);
 							}
-							else texture = LoadTexture(textureFilePath, deviceContext, resourceUploadBatch);
+							else texture = LoadTexture(commandList, textureFilePath, forceSRGBIfNecessary);
+							texture->CreateSRV();
 
 							loadedTextures.emplace_back(isEmbedded, textureFilePath, texture);
 						}
@@ -443,12 +444,7 @@ struct ModelDictionaryLoader {
 		CommandList commandList(deviceContext);
 		commandList.Begin();
 
-		ResourceUploadBatch resourceUploadBatch(deviceContext.Device);
-		resourceUploadBatch.Begin();
-
-		resource.Load(filePath, commandList, resourceUploadBatch);
-
-		resourceUploadBatch.End(deviceContext.CommandQueue).get();
+		resource.Load(filePath, commandList);
 
 		commandList.End();
 	}

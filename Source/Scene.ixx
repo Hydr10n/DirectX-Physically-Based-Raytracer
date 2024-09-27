@@ -5,7 +5,6 @@ module;
 #include "directxtk12/GamePad.h"
 #include "directxtk12/Keyboard.h"
 #include "directxtk12/Mouse.h"
-#include "directxtk12/ResourceUploadBatch.h"
 #include "directxtk12/SimpleMath.h"
 
 #include "rtxmu/D3D12AccelStructManager.h"
@@ -119,18 +118,15 @@ export {
 			CommandList commandList(m_deviceContext);
 			commandList.Begin();
 
-			ResourceUploadBatch resourceUploadBatch(m_deviceContext.Device);
-			resourceUploadBatch.Begin();
-
-			{
-				if (!empty(sceneDesc.EnvironmentLightTexture.FilePath)) {
-					EnvironmentLightTexture.Texture = LoadTexture(ResolveResourcePath(sceneDesc.EnvironmentLightTexture.FilePath), m_deviceContext, resourceUploadBatch);
-					EnvironmentLightTexture.Transform = sceneDesc.EnvironmentLightTexture.Transform;
-				}
-				if (!empty(sceneDesc.EnvironmentTexture.FilePath)) {
-					EnvironmentTexture.Texture = LoadTexture(ResolveResourcePath(sceneDesc.EnvironmentTexture.FilePath), m_deviceContext, resourceUploadBatch);
-					EnvironmentTexture.Transform = sceneDesc.EnvironmentTexture.Transform;
-				}
+			if (!empty(sceneDesc.EnvironmentLightTexture.FilePath)) {
+				EnvironmentLightTexture.Texture = LoadTexture(commandList, ResolveResourcePath(sceneDesc.EnvironmentLightTexture.FilePath), true);
+				EnvironmentLightTexture.Texture->CreateSRV();
+				EnvironmentLightTexture.Transform = sceneDesc.EnvironmentLightTexture.Transform;
+			}
+			if (!empty(sceneDesc.EnvironmentTexture.FilePath)) {
+				EnvironmentTexture.Texture = LoadTexture(commandList, ResolveResourcePath(sceneDesc.EnvironmentTexture.FilePath), true);
+				EnvironmentTexture.Texture->CreateSRV();
+				EnvironmentTexture.Transform = sceneDesc.EnvironmentTexture.Transform;
 			}
 
 			{
@@ -165,8 +161,6 @@ export {
 					RenderObjects.emplace_back(renderObject);
 				}
 			}
-
-			resourceUploadBatch.End(m_deviceContext.CommandQueue).get();
 
 			Tick(0);
 
