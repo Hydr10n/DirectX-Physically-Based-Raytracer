@@ -26,7 +26,6 @@ using namespace DirectX::RaytracingHelpers;
 using namespace DirectX::SimpleMath;
 using namespace Math;
 using namespace ResourceHelpers;
-using namespace rtxmu;
 using namespace std;
 using namespace std::filesystem;
 using namespace TextureHelpers;
