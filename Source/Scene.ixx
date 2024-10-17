@@ -345,7 +345,6 @@ export {
 						.InstanceID = instanceData.FirstGeometryIndex,
 						.InstanceMask = renderObject.IsVisible ? ~0u : 0,
 						.InstanceContributionToHitGroupIndex = instanceData.FirstGeometryIndex,
-						.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE,
 						.AccelerationStructure = accelerationStructureManager.GetAccelStructGPUVA(m_bottomLevelAccelerationStructureIDs.at(meshNode.get()).first)
 						});
 					reinterpret_cast<XMFLOAT3X4&>(instanceDesc.Transform) = instanceData.ObjectToWorld;

@@ -26,8 +26,8 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 	- Russian Roulette
 	- Bounces
 	- Samples/Pixel
-- NVIDIA Shader Execution Reordering
-	- NVIDIA RTX Dynamic Illumination
+	- NVIDIA Shader Execution Reordering
+	- NVIDIA RTXDI
 		- ReSTIR DI
 			- ReGIR
 				- Cell
@@ -45,7 +45,7 @@ https://github.com/Hydr10n/DirectX-Physically-Based-Raytracer/assets/39995363/60
 			- Spatial Resampling
 				- Bias Correction Mode: Basic | Pairwise | Raytraced
 				- Samples
-	- NVIDIA RTX Global Illumination
+	- NVIDIA RTXGI
 		- SHARC
 			- Downscale Factor
 			- Scene Scale

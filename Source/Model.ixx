@@ -323,13 +323,11 @@ export {
 				const auto& material = *scene.mMaterials[mesh.mMaterialIndex];
 
 				auto& _material = Materials.emplace_back();
-				aiColor4D color;
-				if (material.Get(AI_MATKEY_BASE_COLOR, color) == AI_SUCCESS || material.Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {
-					_material.BaseColor = reinterpret_cast<const XMFLOAT4&>(color);
+				if (material.Get(AI_MATKEY_BASE_COLOR, reinterpret_cast<aiColor4D&>(_material.BaseColor)) != AI_SUCCESS) {
+					material.Get(AI_MATKEY_COLOR_DIFFUSE, reinterpret_cast<aiColor4D&>(_material.BaseColor));
 				}
-				if (material.Get(AI_MATKEY_COLOR_EMISSIVE, color) == AI_SUCCESS) {
-					_material.EmissiveColor = reinterpret_cast<const XMFLOAT3&>(color);
-				}
+				material.Get(AI_MATKEY_COLOR_EMISSIVE, reinterpret_cast<aiColor3D&>(_material.EmissiveColor));
+				material.Get(AI_MATKEY_EMISSIVE_INTENSITY, _material.EmissiveIntensity);
 				material.Get(AI_MATKEY_METALLIC_FACTOR, _material.Metallic);
 				material.Get(AI_MATKEY_ROUGHNESS_FACTOR, _material.Roughness);
 				if (material.Get(AI_MATKEY_TRANSMISSION_FACTOR, _material.Transmission) != AI_SUCCESS
@@ -355,6 +353,8 @@ export {
 					TextureMapType::Opacity,
 					TextureMapType::Normal
 					}) {
+					if (textureMapType == TextureMapType::Opacity && textures[to_underlying(TextureMapType::Transmission)]) continue;
+
 					aiTextureType type;
 					switch (textureMapType) {
 						case TextureMapType::BaseColor: type = aiTextureType_BASE_COLOR; break;
@@ -367,6 +367,7 @@ export {
 						case TextureMapType::Normal: type = aiTextureType_NORMALS; break;
 						default: throw;
 					}
+
 					if (aiString filePath;
 						material.GetTexture(type, 0, &filePath) == AI_SUCCESS
 						|| (textureMapType == TextureMapType::BaseColor && material.GetTexture(aiTextureType_DIFFUSE, 0, &filePath) == AI_SUCCESS)
