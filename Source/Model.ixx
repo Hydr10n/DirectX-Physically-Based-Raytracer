@@ -285,9 +285,7 @@ export {
 			vector<Mesh::IndexType> indices;
 			indices.reserve(indexCount);
 			for (const auto i : views::iota(0u, mesh.mNumFaces)) {
-				for (const auto j : views::iota(0u, mesh.mFaces[i].mNumIndices)) {
-					indices.emplace_back(mesh.mFaces[i].mIndices[j]);
-				}
+				indices.append_range(span(mesh.mFaces[i].mIndices, mesh.mFaces[i].mNumIndices));
 			}
 
 			const auto _mesh = make_shared<Mesh>();
