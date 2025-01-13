@@ -33,8 +33,8 @@ export {
 	JSON_CONVERSION_FUNCTIONS(RenderObjectDesc, Name, Transform, IsVisible, Model, Animation);
 
 	JSON_CONVERSION_FUNCTIONS(decltype(SceneDesc::Camera), Position, Rotation);
-	JSON_CONVERSION_FUNCTIONS(decltype(SceneDesc::EnvironmentTexture), FilePath, Transform);
-	JSON_CONVERSION_FUNCTIONS(SceneDesc, Camera, EnvironmentLightColor, EnvironmentColor, EnvironmentLightTexture, EnvironmentTexture, Models, Animations, RenderObjects);
+	JSON_CONVERSION_FUNCTIONS(decltype(SceneDesc::EnvironmentLightTexture), FilePath, Transform);
+	JSON_CONVERSION_FUNCTIONS(SceneDesc, Camera, EnvironmentLightColor, EnvironmentLightTexture, Models, Animations, RenderObjects);
 
 	struct MySceneDesc : SceneDesc {
 		MySceneDesc(const path& filePath) {
@@ -63,10 +63,13 @@ export {
 					CheckResources("Animations", Animations, renderObject.Animation);
 				}
 
-				const auto ResolvePath = [&](path& path) { if (!empty(path) && !path.is_absolute()) path = filesystem::path(filePath).replace_filename(path); };
-				const auto ResolvePaths = [&](unordered_map<string, path>& resources) { for (auto& Path : resources | views::values) ResolvePath(Path); };
+				const auto ResolvePath = [&](path& path) {
+					if (!empty(path) && !path.is_absolute()) path = filesystem::path(filePath).replace_filename(path);
+				};
+				const auto ResolvePaths = [&](unordered_map<string, path>& resources) {
+					for (auto& Path : resources | views::values) ResolvePath(Path);
+				};
 				ResolvePath(EnvironmentLightTexture.FilePath);
-				ResolvePath(EnvironmentTexture.FilePath);
 				ResolvePaths(Models);
 				ResolvePaths(Animations);
 			}
