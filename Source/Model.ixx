@@ -136,7 +136,7 @@ export {
 									destination = GPUBuffer::CreateDefault<T>(deviceContext, source->GetCapacity());
 									destination->CreateSRV(isVertex ? BufferSRVType::Raw : BufferSRVType::Structured);
 									commandList.Copy(*destination, *source);
-									commandList.SetState(*destination, isVertex ? D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER : D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+									commandList.SetState(*destination, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 								};
 								CopyBuffer.operator() < Mesh::VertexType > (newMesh->Vertices, mesh->Vertices, true);
 								CopyBuffer.operator() < XMFLOAT3 > (newMesh->MotionVectors, mesh->MotionVectors, false);
@@ -295,19 +295,19 @@ export {
 			const auto& deviceContext = commandList.GetDeviceContext();
 
 			{
-				const auto CreateBuffer = [&]<typename T>(auto & buffer, const vector<T>&data, D3D12_RESOURCE_STATES afterState, bool isStructuredSRV = true, bool hasSRV = true) {
+				const auto CreateBuffer = [&]<typename T>(auto & buffer, const vector<T>&data, bool isStructuredSRV = true, bool hasSRV = true) {
 					buffer = GPUBuffer::CreateDefault<T>(deviceContext, size(data));
 					if (hasSRV) buffer->CreateSRV(isStructuredSRV ? BufferSRVType::Structured : BufferSRVType::Raw);
 					commandList.Copy(*buffer, data);
-					commandList.SetState(*buffer, afterState);
+					commandList.SetState(*buffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				};
 
-				CreateBuffer(_mesh->Vertices, vertices, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, false);
-				CreateBuffer(_mesh->Indices, indices, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+				CreateBuffer(_mesh->Vertices, vertices, false);
+				CreateBuffer(_mesh->Indices, indices);
 
 				if (mesh.HasBones()) {
-					CreateBuffer(_mesh->SkeletalVertices, GetBones(vertices, mesh), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, false, false);
-					CreateBuffer(_mesh->MotionVectors, vector<XMFLOAT3>(size(vertices)), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+					CreateBuffer(_mesh->SkeletalVertices, GetBones(vertices, mesh), false, false);
+					CreateBuffer(_mesh->MotionVectors, vector<XMFLOAT3>(size(vertices)));
 				}
 			}
 
