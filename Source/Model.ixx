@@ -337,53 +337,42 @@ export {
 					if (!_stricmp(alphaMode.C_Str(), "Opaque")) _material.AlphaMode = AlphaMode::Opaque;
 					else if (!_stricmp(alphaMode.C_Str(), "Blend")) _material.AlphaMode = AlphaMode::Blend;
 					else if (!_stricmp(alphaMode.C_Str(), "Mask")) _material.AlphaMode = AlphaMode::Mask;
-					material.Get(AI_MATKEY_GLTF_ALPHACUTOFF, _material.AlphaThreshold);
+					material.Get(AI_MATKEY_GLTF_ALPHACUTOFF, _material.AlphaCutoff);
 				}
 
 				auto& textures = Textures.emplace_back();
-				for (const auto textureMapType : {
-					TextureMapType::BaseColor,
-					TextureMapType::EmissiveColor,
-					TextureMapType::Metallic,
-					TextureMapType::Roughness,
-					TextureMapType::AmbientOcclusion,
-					TextureMapType::Transmission,
-					TextureMapType::Opacity,
-					TextureMapType::Normal
-					}) {
-					if (textureMapType == TextureMapType::Opacity && textures[to_underlying(TextureMapType::Transmission)]) continue;
+				for (const auto i : views::iota(0u, static_cast<uint32_t>(TextureMapType::Count))) {
+					const auto type = static_cast<TextureMapType>(i);
+					if (type == TextureMapType::Opacity && textures[to_underlying(TextureMapType::Transmission)]) continue;
 
-					aiTextureType type;
-					switch (textureMapType) {
-						case TextureMapType::BaseColor: type = aiTextureType_BASE_COLOR; break;
-						case TextureMapType::EmissiveColor: type = aiTextureType_EMISSION_COLOR; break;
-						case TextureMapType::Metallic: type = aiTextureType_METALNESS; break;
-						case TextureMapType::Roughness: type = aiTextureType_DIFFUSE_ROUGHNESS; break;
-						case TextureMapType::AmbientOcclusion: type = aiTextureType_AMBIENT_OCCLUSION; break;
-						case TextureMapType::Transmission: type = aiTextureType_TRANSMISSION; break;
-						case TextureMapType::Opacity: type = aiTextureType_OPACITY; break;
-						case TextureMapType::Normal: type = aiTextureType_NORMALS; break;
-						default: throw;
+					aiTextureType textureType = aiTextureType_NONE;
+					switch (type) {
+						case TextureMapType::BaseColor: textureType = aiTextureType_BASE_COLOR; break;
+						case TextureMapType::EmissiveColor: textureType = aiTextureType_EMISSION_COLOR; break;
+						case TextureMapType::Metallic: textureType = aiTextureType_METALNESS; break;
+						case TextureMapType::Roughness: textureType = aiTextureType_DIFFUSE_ROUGHNESS; break;
+						case TextureMapType::Transmission: textureType = aiTextureType_TRANSMISSION; break;
+						case TextureMapType::Opacity: textureType = aiTextureType_OPACITY; break;
+						case TextureMapType::Normal: textureType = aiTextureType_NORMAL_CAMERA; break;
 					}
 
 					if (aiString filePath;
-						material.GetTexture(type, 0, &filePath) == AI_SUCCESS
-						|| (textureMapType == TextureMapType::BaseColor && material.GetTexture(aiTextureType_DIFFUSE, 0, &filePath) == AI_SUCCESS)
-						|| (textureMapType == TextureMapType::EmissiveColor && material.GetTexture(aiTextureType_EMISSIVE, 0, &filePath) == AI_SUCCESS)
-						|| (textureMapType == TextureMapType::Normal
-							&& (material.GetTexture(aiTextureType_HEIGHT, 0, &filePath) == AI_SUCCESS || material.GetTexture(aiTextureType_NORMAL_CAMERA, 0, &filePath) == AI_SUCCESS))) {
+						(textureType != aiTextureType_NONE && material.GetTexture(textureType, 0, &filePath) == AI_SUCCESS)
+						|| (type == TextureMapType::BaseColor && material.GetTexture(aiTextureType_DIFFUSE, 0, &filePath) == AI_SUCCESS)
+						|| (type == TextureMapType::EmissiveColor && material.GetTexture(aiTextureType_EMISSIVE, 0, &filePath) == AI_SUCCESS)
+						|| (type == TextureMapType::Normal && material.GetTexture(aiTextureType_NORMALS, 0, &filePath) == AI_SUCCESS)) {
 						path textureFilePath = reinterpret_cast<const char8_t*>(filePath.C_Str());
 						const auto embeddedTexture = scene.GetEmbeddedTexture(filePath.C_Str());
 						const auto isEmbedded = embeddedTexture != nullptr;
 						if (!isEmbedded) textureFilePath = path(modelFilePath).replace_filename(textureFilePath);
-						auto& texture = textures[to_underlying(textureMapType)];
+						auto& texture = textures[to_underlying(type)];
 						if (const auto pLoadedTexture = ranges::find_if(loadedTextures, [&](const auto& value) { return value.IsSameAs(isEmbedded, textureFilePath); });
 							pLoadedTexture == cend(loadedTextures)) {
-							const auto forceSRGBIfNecessary = textureMapType == TextureMapType::BaseColor || textureMapType == TextureMapType::EmissiveColor;
+							const auto forceSRGB = type == TextureMapType::BaseColor || type == TextureMapType::EmissiveColor;
 							if (isEmbedded) {
-								texture = LoadTexture(commandList, embeddedTexture->achFormatHint, embeddedTexture->pcData, embeddedTexture->mHeight ? embeddedTexture->mWidth * embeddedTexture->mHeight * 4 : embeddedTexture->mWidth, forceSRGBIfNecessary);
+								texture = LoadTexture(commandList, embeddedTexture->achFormatHint, embeddedTexture->pcData, embeddedTexture->mHeight ? embeddedTexture->mWidth * embeddedTexture->mHeight * 4 : embeddedTexture->mWidth, forceSRGB);
 							}
-							else texture = LoadTexture(commandList, textureFilePath, forceSRGBIfNecessary);
+							else texture = LoadTexture(commandList, textureFilePath, forceSRGB);
 							texture->CreateSRV();
 
 							loadedTextures.emplace_back(isEmbedded, textureFilePath, texture);

@@ -180,8 +180,7 @@ export {
 		void Refresh() {
 			UINT instanceIndex = 0, objectIndex = 0;
 			for (const auto& renderObject : RenderObjects) {
-				const auto& meshNodes = renderObject.Model.MeshNodes;
-				for (const auto& meshNode : meshNodes) {
+				for (const auto& meshNode : renderObject.Model.MeshNodes) {
 					const auto Transform = [&] {
 						const auto To3x4 = [](const Matrix& matrix) {
 							XMFLOAT3X4 ret;
