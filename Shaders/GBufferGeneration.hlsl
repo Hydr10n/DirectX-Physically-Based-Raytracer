@@ -8,7 +8,8 @@ SamplerState g_anisotropicSampler : register(s0);
 
 RaytracingAccelerationStructure g_scene : register(t0);
 
-struct Flags {
+struct Flags
+{
 	enum {
 		Radiance = 0x1,
 		Position = 0x2,
@@ -23,7 +24,8 @@ struct Flags {
 	};
 };
 
-struct Constants {
+struct Constants
+{
 	uint2 RenderSize;
 	uint Flags;
 };
@@ -111,7 +113,6 @@ void main(uint2 pixelPosition : SV_DispatchThreadID)
 	float3 Radiance = 0;
 	float LinearDepth = 1.#INF, NormalizedDepth = !g_camera.IsNormalizedDepthReversed;
 	float3 MotionVector = 0;
-	float4 NormalRoughness = 0;
 
 	const float2 UV = Math::CalculateUV(pixelPosition, pixelDimensions, g_camera.Jitter);
 	const RayDesc rayDesc = g_camera.GeneratePinholeRay(Math::CalculateNDC(UV));
@@ -159,7 +160,8 @@ void main(uint2 pixelPosition : SV_DispatchThreadID)
 
 		if (g_constants.Flags & Flags::NormalRoughness)
 		{
-			NormalRoughness = NRD_FrontEnd_PackNormalAndRoughness(hitInfo.Normal, material.Roughness, material.Metallic >= 0.5f);
+			const float4 NormalRoughness = NRD_FrontEnd_PackNormalAndRoughness(hitInfo.Normal, material.Roughness, material.Metallic >= 0.5f);
+			SET(NormalRoughness);
 		}
 	}
 	else if (g_constants.Flags & Flags::Material)
@@ -171,5 +173,4 @@ void main(uint2 pixelPosition : SV_DispatchThreadID)
 	SET1(LinearDepth);
 	SET1(NormalizedDepth);
 	SET1(MotionVector);
-	SET1(NormalRoughness);
 }

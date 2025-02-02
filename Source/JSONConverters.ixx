@@ -4,7 +4,7 @@ module;
 
 #include "directxtk12/SimpleMath.h"
 
-export module JsonConverters;
+export module JSONConverters;
 
 import Math;
 
@@ -25,6 +25,6 @@ export {
 	}
 
 	namespace Math {
-		JSON_CONVERSION_FUNCTIONS(AffineTransform, Translation, Rotation, Scaling);
+		JSON_CONVERSION_FUNCTIONS(AffineTransform, Translation, Rotation, Scale);
 	}
 }

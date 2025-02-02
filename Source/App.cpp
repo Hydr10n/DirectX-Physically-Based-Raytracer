@@ -951,8 +951,8 @@ private:
 									case TextureMapType::EmissiveColor: indices.EmissiveColor = index; break;
 									case TextureMapType::Metallic: indices.Metallic = index; break;
 									case TextureMapType::Roughness: indices.Roughness = index; break;
+									case TextureMapType::MetallicRoughness: indices.MetallicRoughness = index; break;
 									case TextureMapType::Transmission: indices.Transmission = index; break;
-									case TextureMapType::Opacity: indices.Opacity = index; break;
 									case TextureMapType::Normal: indices.Normal = index; break;
 									default: Throw<out_of_range>("Unsupported texture map type");
 								}
@@ -1159,7 +1159,6 @@ private:
 		m_raytracing->GPUBuffers = {
 			.SceneData = m_GPUBuffers.SceneData.get(),
 			.Camera = m_GPUBuffers.Camera.get(),
-			.InstanceData = m_GPUBuffers.InstanceData.get(),
 			.ObjectData = m_GPUBuffers.ObjectData.get()
 		};
 

@@ -4,8 +4,8 @@ module;
 #include <filesystem>
 #include <ranges>
 
-#include "assimp/GltfMaterial.h"
 #include "assimp/Importer.hpp"
+#include "assimp/pbrmaterial.h"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
@@ -325,7 +325,7 @@ export {
 					material.Get(AI_MATKEY_COLOR_DIFFUSE, reinterpret_cast<aiColor4D&>(_material.BaseColor));
 				}
 				material.Get(AI_MATKEY_COLOR_EMISSIVE, reinterpret_cast<aiColor3D&>(_material.EmissiveColor));
-				material.Get(AI_MATKEY_EMISSIVE_INTENSITY, _material.EmissiveIntensity);
+				material.Get(AI_MATKEY_EMISSIVE_INTENSITY, _material.EmissiveStrength);
 				material.Get(AI_MATKEY_METALLIC_FACTOR, _material.Metallic);
 				material.Get(AI_MATKEY_ROUGHNESS_FACTOR, _material.Roughness);
 				if (material.Get(AI_MATKEY_TRANSMISSION_FACTOR, _material.Transmission) != AI_SUCCESS
@@ -343,16 +343,15 @@ export {
 				auto& textures = Textures.emplace_back();
 				for (const auto i : views::iota(0u, static_cast<uint32_t>(TextureMapType::Count))) {
 					const auto type = static_cast<TextureMapType>(i);
-					if (type == TextureMapType::Opacity && textures[to_underlying(TextureMapType::Transmission)]) continue;
 
-					aiTextureType textureType = aiTextureType_NONE;
+					auto textureType = aiTextureType_NONE;
 					switch (type) {
 						case TextureMapType::BaseColor: textureType = aiTextureType_BASE_COLOR; break;
 						case TextureMapType::EmissiveColor: textureType = aiTextureType_EMISSION_COLOR; break;
-						case TextureMapType::Metallic: textureType = aiTextureType_METALNESS; break;
+						case TextureMapType::Metallic:
+						case TextureMapType::MetallicRoughness: textureType = aiTextureType_METALNESS; break;
 						case TextureMapType::Roughness: textureType = aiTextureType_DIFFUSE_ROUGHNESS; break;
 						case TextureMapType::Transmission: textureType = aiTextureType_TRANSMISSION; break;
-						case TextureMapType::Opacity: textureType = aiTextureType_OPACITY; break;
 						case TextureMapType::Normal: textureType = aiTextureType_NORMAL_CAMERA; break;
 					}
 
@@ -370,7 +369,11 @@ export {
 							pLoadedTexture == cend(loadedTextures)) {
 							const auto forceSRGB = type == TextureMapType::BaseColor || type == TextureMapType::EmissiveColor;
 							if (isEmbedded) {
-								texture = LoadTexture(commandList, embeddedTexture->achFormatHint, embeddedTexture->pcData, embeddedTexture->mHeight ? embeddedTexture->mWidth * embeddedTexture->mHeight * 4 : embeddedTexture->mWidth, forceSRGB);
+								const span data(
+									reinterpret_cast<const std::byte*>(embeddedTexture->pcData),
+									embeddedTexture->mWidth * (embeddedTexture->mHeight ? embeddedTexture->mHeight * 4 : 1)
+								);
+								texture = LoadTexture(commandList, embeddedTexture->achFormatHint, data, forceSRGB);
 							}
 							else texture = LoadTexture(commandList, textureFilePath, forceSRGB);
 							texture->CreateSRV();

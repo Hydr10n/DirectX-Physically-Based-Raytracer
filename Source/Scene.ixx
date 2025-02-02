@@ -99,7 +99,9 @@ export {
 				IDs.emplace_back(ID.first);
 				MeshNode->OnDestroyed.remove(ID.second);
 			}
-			if (m_topLevelAccelerationStructure.ID != ~0ull) IDs.emplace_back(m_topLevelAccelerationStructure.ID);
+			if (m_topLevelAccelerationStructure.ID != ~0ull) {
+				IDs.emplace_back(m_topLevelAccelerationStructure.ID);
+			}
 			m_deviceContext.AccelerationStructureManager->RemoveAccelerationStructures(IDs);
 			m_bottomLevelAccelerationStructureIDs = {};
 			m_topLevelAccelerationStructure = {};
@@ -216,21 +218,29 @@ export {
 		void SkinSkeletalMeshes(CommandList& commandList) {
 			auto prepared = false;
 			for (const auto& renderObject : RenderObjects) {
-				if (!renderObject.IsVisible) continue;
+				if (!renderObject.IsVisible) {
+					continue;
+				}
 
 				const auto& model = renderObject.Model;
 
 				const auto& animationCollection = renderObject.AnimationCollection;
-				if (empty(animationCollection) || !animationCollection.HasBoneInfo()) continue;
+				if (empty(animationCollection) || !animationCollection.HasBoneInfo()) {
+					continue;
+				}
 
 				const auto& skeletalTransforms = animationCollection[animationCollection.GetSelectedIndex()].GetSkeletalTransforms();
-				if (empty(skeletalTransforms)) continue;
+				if (empty(skeletalTransforms)) {
+					continue;
+				}
 
 				auto copied = false;
 
 				for (const auto& meshNode : model.MeshNodes) {
 					for (const auto& mesh : meshNode->Meshes) {
-						if (!mesh->SkeletalVertices) continue;
+						if (!mesh->SkeletalVertices) {
+							continue;
+						}
 
 						if (!prepared) {
 							m_skeletalMeshSkinning.Prepare(commandList);
@@ -274,7 +284,9 @@ export {
 					const auto& model = renderObject.Model;
 
 					const auto& animationCollection = renderObject.AnimationCollection;
-					const auto isAnimated = !empty(animationCollection) && animationCollection.HasBoneInfo() && !empty(animationCollection[animationCollection.GetSelectedIndex()].GetSkeletalTransforms());
+					const auto isAnimated = !empty(animationCollection)
+						&& animationCollection.HasBoneInfo()
+						&& !empty(animationCollection[animationCollection.GetSelectedIndex()].GetSkeletalTransforms());
 
 					for (const auto& meshNode : model.MeshNodes) {
 						auto isSkeletal = false;
@@ -286,12 +298,18 @@ export {
 						}
 
 						const auto [first, second] = m_bottomLevelAccelerationStructureIDs.try_emplace(meshNode.get());
-						if (!second && (!renderObject.IsVisible || !isAnimated || !isSkeletal)) continue;
+						if (!second && (!renderObject.IsVisible || !isAnimated || !isSkeletal)) {
+							continue;
+						}
 
 						auto& _geometryDescs = geometryDescs.emplace_back();
 						_geometryDescs.reserve(size(meshNode->Meshes));
 						for (const auto& mesh : meshNode->Meshes) {
-							_geometryDescs.emplace_back(CreateGeometryDesc(*mesh->Vertices, *mesh->Indices, mesh->MaterialIndex == ~0u || model.Materials[mesh->MaterialIndex].AlphaMode == AlphaMode::Opaque ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE));
+							_geometryDescs.emplace_back(CreateGeometryDesc(
+								*mesh->Vertices, *mesh->Indices,
+								mesh->MaterialIndex == ~0u || model.Materials[mesh->MaterialIndex].AlphaMode == AlphaMode::Opaque ?
+								D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE)
+							);
 						}
 
 						if (const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{
@@ -327,7 +345,9 @@ export {
 					}
 				}
 
-				if (!empty(updatedInputs)) commandList.UpdateAccelerationStructures(updatedInputs, updatedIDs);
+				if (!empty(updatedInputs)) {
+					commandList.UpdateAccelerationStructures(updatedInputs, updatedIDs);
+				}
 			}
 
 			vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;

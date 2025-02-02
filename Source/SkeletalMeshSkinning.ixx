@@ -55,7 +55,7 @@ export struct SkeletalMeshSkinning {
 
 		commandList->Dispatch((vertexCount + 255) / 256, 1, 1);
 
-		commandList.SetState(*GPUBuffers.Vertices, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+		commandList.SetState(*GPUBuffers.Vertices, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 		commandList.SetState(*GPUBuffers.MotionVectors, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	}
 

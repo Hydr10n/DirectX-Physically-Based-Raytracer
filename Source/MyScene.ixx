@@ -9,14 +9,14 @@ module;
 #include "directxtk12/Keyboard.h"
 #include "directxtk12/Mouse.h"
 
-#include "JsonHelpers.h"
+#include "JSONHelpers.h"
 
 export module MyScene;
 
 export import Scene;
 
 import ErrorHelpers;
-import JsonConverters;
+import JSONConverters;
 import ResourceHelpers;
 
 using namespace DirectX;
@@ -38,7 +38,9 @@ export {
 
 	struct MySceneDesc : SceneDesc {
 		MySceneDesc(const path& filePath) {
-			if (empty(filePath)) throw invalid_argument("Scene file path cannot be empty");
+			if (empty(filePath)) {
+				throw invalid_argument("Scene file path cannot be empty");
+			}
 
 			const auto filePathString = filePath.string();
 
@@ -51,29 +53,39 @@ export {
 				reinterpret_cast<SceneDesc&>(*this) = json;
 
 				for (const auto& renderObject : RenderObjects) {
-					const auto CheckResources = [&](const char* name, const unordered_map<string, path>& resources, const string& URI) {
+					const auto Check = [&](const char* name, const unordered_map<string, path>& resources, const string& URI) {
 						if (!empty(URI) && !resources.contains(URI)) {
 							auto renderObjectInfo = "RenderObject"s;
-							if (empty(renderObject.Name)) renderObjectInfo = "Unnamed " + renderObjectInfo;
-							else renderObjectInfo += " " + renderObject.Name;
+							if (empty(renderObject.Name)) {
+								renderObjectInfo = "Unnamed " + renderObjectInfo;
+							}
+							else {
+								renderObjectInfo += " " + renderObject.Name;
+							}
 							throw runtime_error(format("{}: {}: {} {} not found", filePathString, renderObjectInfo, name, URI));
 						}
 					};
-					CheckResources("Models", Models, renderObject.Model);
-					CheckResources("Animations", Animations, renderObject.Animation);
+					Check("Models", Models, renderObject.Model);
+					Check("Animations", Animations, renderObject.Animation);
 				}
 
 				const auto ResolvePath = [&](path& path) {
-					if (!empty(path) && !path.is_absolute()) path = filesystem::path(filePath).replace_filename(path);
+					if (!empty(path) && !path.is_absolute()) {
+						path = filesystem::path(filePath).replace_filename(path);
+					}
 				};
 				const auto ResolvePaths = [&](unordered_map<string, path>& resources) {
-					for (auto& Path : resources | views::values) ResolvePath(Path);
+					for (auto& Path : resources | views::values) {
+						ResolvePath(Path);
+					}
 				};
 				ResolvePath(EnvironmentLightTexture.FilePath);
 				ResolvePaths(Models);
 				ResolvePaths(Animations);
 			}
-			catch (const json::exception& e) { throw runtime_error(format("{}: {}", filePathString, e.what())); }
+			catch (const json::exception& e) {
+				throw runtime_error(format("{}: {}", filePathString, e.what()));
+			}
 		}
 	};
 
@@ -84,8 +96,12 @@ export {
 
 		void Tick(double elapsedSeconds, const GamePad::ButtonStateTracker& gamepadStateTracker, const Keyboard::KeyboardStateTracker& keyboardStateTracker, const Mouse::ButtonStateTracker& mouseStateTracker) override {
 			if (mouseStateTracker.GetLastState().positionMode == Mouse::MODE_RELATIVE) {
-				if (gamepadStateTracker.a == GamepadButtonState::PRESSED) m_isAnimationPlaying = !m_isAnimationPlaying;
-				if (keyboardStateTracker.IsKeyPressed(Key::Space)) m_isAnimationPlaying = !m_isAnimationPlaying;
+				if (gamepadStateTracker.a == GamepadButtonState::PRESSED) {
+					m_isAnimationPlaying = !m_isAnimationPlaying;
+				}
+				if (keyboardStateTracker.IsKeyPressed(Key::Space)) {
+					m_isAnimationPlaying = !m_isAnimationPlaying;
+				}
 			}
 
 			if (IsStatic()) return;
@@ -98,14 +114,18 @@ export {
 	protected:
 		void Tick(double elapsedSeconds) override {
 			for (auto& renderObject : RenderObjects) {
-				if (!renderObject.IsVisible) continue;
+				if (!renderObject.IsVisible || empty(renderObject.Model.MeshNodes)) {
+					continue;
+				}
 
-				if (auto& animationCollection = renderObject.AnimationCollection; !empty(renderObject.Model.MeshNodes) && !empty(animationCollection)) {
+				if (auto& animationCollection = renderObject.AnimationCollection; !empty(animationCollection)) {
 					const auto selectedIndex = animationCollection.GetSelectedIndex();
 					auto& animation = animationCollection[selectedIndex];
 					const auto time = animation.GetTime();
 					animation.Tick(elapsedSeconds);
-					if (animation.GetTime() < time) animationCollection.SetSelectedIndex((selectedIndex + 1) % size(animationCollection));
+					if (animation.GetTime() < time) {
+						animationCollection.SetSelectedIndex((selectedIndex + 1) % size(animationCollection));
+					}
 				}
 			}
 		}
