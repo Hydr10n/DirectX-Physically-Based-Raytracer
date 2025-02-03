@@ -71,14 +71,10 @@ struct VertexPositionNormalTextureTangent
 	float2 Normal, Tangent;
 };
 
-struct VertexPositionNormalTangentBones
+struct VertexPositionNormalTangentSkin
 {
 	float3 Position;
-	float _;
 	float2 Normal, Tangent;
-	struct
-	{
-		uint ID;
-		float Weight;
-	} Bones[4];
+	uint16_t4 Joints;
+	float3 Weights;
 };

@@ -114,11 +114,12 @@ add_custom_command(TARGET ${project} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy
 	"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 set(packages
-	assimp
 	directx12-agility
+	directxmesh
 	directxtex
 	directxtk12
 	eventpp
+	fastgltf
 	imgui
 	nlohmann_json)
 foreach(package ${packages})
@@ -126,11 +127,12 @@ foreach(package ${packages})
 endforeach()
 
 target_link_libraries(${project} PRIVATE
-	assimp::assimp
-	eventpp::eventpp
 	Microsoft::DirectX12-Agility
+	Microsoft::DirectXMesh
 	Microsoft::DirectXTex
 	Microsoft::DirectXTK12
+	eventpp::eventpp
+	fastgltf::fastgltf
 	imgui::imgui
 	nlohmann_json::nlohmann_json)
 

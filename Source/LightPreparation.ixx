@@ -54,7 +54,7 @@ export struct LightPreparation {
 		for (const auto& renderObject : m_scene->RenderObjects) {
 			for (const auto& model = renderObject.Model; const auto & meshNode : model.MeshNodes) {
 				for (const auto& mesh : meshNode->Meshes) {
-					if (IsEmissive(model, mesh->MaterialIndex)) {
+					if (IsEmissive(model, mesh->MaterialIndex, mesh->TextureIndex)) {
 						emissiveMeshCount++;
 						emissiveTriangleCount += static_cast<UINT>(mesh->Indices->GetCapacity()) / 3;
 					}
@@ -79,7 +79,7 @@ export struct LightPreparation {
 		for (UINT instanceIndex = 0, lightBufferOffset = 0; const auto & renderObject : m_scene->RenderObjects) {
 			for (const auto& model = renderObject.Model; const auto & meshNode : model.MeshNodes) {
 				for (UINT geometryIndex = 0; const auto & mesh : meshNode->Meshes) {
-					if (IsEmissive(model, mesh->MaterialIndex)) {
+					if (IsEmissive(model, mesh->MaterialIndex, mesh->TextureIndex)) {
 						_lightIndices[m_scene->GetInstanceData()[instanceIndex].FirstGeometryIndex + geometryIndex] = lightBufferOffset;
 						const auto triangleCount = static_cast<UINT>(mesh->Indices->GetCapacity()) / 3;
 						tasks.emplace_back(Task{
@@ -136,8 +136,9 @@ private:
 	struct Task { UINT InstanceIndex, GeometryIndex, TriangleCount, LightBufferOffset; };
 	struct { unique_ptr<GPUBuffer> Tasks; } m_GPUBuffers;
 
-	static constexpr bool IsEmissive(const Model& model, UINT materialIndex) {
+	static constexpr bool IsEmissive(const Model& model, UINT materialIndex, UINT textureIndex) {
 		constexpr auto Max = [](const XMFLOAT3& value) { return max(max(value.x, value.y), value.z); };
-		return materialIndex != ~0u && (Max(model.Materials[materialIndex].EmissiveColor) > 0 || model.Textures[materialIndex][to_underlying(TextureMapType::EmissiveColor)]);
+		return (materialIndex != ~0u && Max(model.Materials[materialIndex].EmissiveColor) > 0)
+			|| (textureIndex != ~0u && model.Textures[textureIndex][to_underlying(TextureMapType::EmissiveColor)]);
 	}
 };

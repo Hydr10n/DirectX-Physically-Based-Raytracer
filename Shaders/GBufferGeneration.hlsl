@@ -69,10 +69,21 @@ float3 CalculateMotionVector(float2 UV, uint2 pixelDimensions, float linearDepth
 		const MeshResourceDescriptorIndices meshIndices = g_objectData[hitInfo.ObjectIndex].ResourceDescriptorIndices.Mesh;
 		if (meshIndices.MotionVectors != ~0u)
 		{
-			const StructuredBuffer<float3> meshMotionVectors = ResourceDescriptorHeap[meshIndices.MotionVectors];
+			const StructuredBuffer<uint2> meshMotionVectors = ResourceDescriptorHeap[meshIndices.MotionVectors];
 			const uint3 indices = MeshHelpers::Load3Indices(ResourceDescriptorHeap[meshIndices.Indices], hitInfo.PrimitiveIndex);
-			const float3 motionVectors[] = { meshMotionVectors[indices[0]], meshMotionVectors[indices[1]], meshMotionVectors[indices[2]] };
-			previousPosition += Vertex::Interpolate(motionVectors, hitInfo.Barycentrics);
+			const uint2 motionVectors[] =
+			{
+				meshMotionVectors[indices[0]],
+				meshMotionVectors[indices[1]],
+				meshMotionVectors[indices[2]]
+			};
+			const float3 _motionVectors[] =
+			{
+				float3(Packing::UintToRg16f(motionVectors[0].x), Packing::UintToRg16f(motionVectors[0].y).x),
+				float3(Packing::UintToRg16f(motionVectors[1].x), Packing::UintToRg16f(motionVectors[1].y).x),
+				float3(Packing::UintToRg16f(motionVectors[2].x), Packing::UintToRg16f(motionVectors[2].y).x)
+			};
+			previousPosition += Vertex::Interpolate(_motionVectors, hitInfo.Barycentrics);
 		}
 		previousPosition = Geometry::AffineTransform(g_instanceData[hitInfo.InstanceIndex].PreviousObjectToWorld, previousPosition);
 	}

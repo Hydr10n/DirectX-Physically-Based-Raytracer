@@ -942,11 +942,12 @@ private:
 						.MotionVectors = mesh->MotionVectors ? mesh->MotionVectors->GetSRVDescriptor(BufferSRVType::Structured) : ~0u
 					};
 
-					if (mesh->MaterialIndex != ~0u) {
-						for (size_t i = 0; const auto & texture : renderObject.Model.Textures[mesh->MaterialIndex]) {
+					if (mesh->TextureIndex != ~0u) {
+						for (size_t i = 0; const auto & texture : renderObject.Model.Textures[mesh->TextureIndex]) {
 							if (texture) {
 								const auto index = texture->GetSRVDescriptor().GetIndex();
-								switch (auto& indices = _objectData.ResourceDescriptorIndices.Textures; static_cast<TextureMapType>(i)) {
+								switch (auto& indices = _objectData.ResourceDescriptorIndices.Textures;
+								static_cast<TextureMapType>(i)) {
 									case TextureMapType::BaseColor: indices.BaseColor = index; break;
 									case TextureMapType::EmissiveColor: indices.EmissiveColor = index; break;
 									case TextureMapType::Metallic: indices.Metallic = index; break;
@@ -2128,7 +2129,7 @@ private:
 		if (empty(m_sceneErrorMessage)) {
 			ImGui::SetNextWindowSize({});
 
-			const auto label = "Loading Scene";
+			constexpr auto label = "Loading Scene";
 			if (ImGuiEx::Window window(label, nullptr, ImGuiWindowFlags_NoTitleBar); window) {
 				{
 					const auto radius = static_cast<float>(GetOutputSize().cy) * 0.01f;

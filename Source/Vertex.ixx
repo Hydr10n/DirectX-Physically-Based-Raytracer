@@ -7,7 +7,10 @@ module;
 
 export module Vertex;
 
+import Math;
+
 using namespace DirectX;
+using namespace Math;
 using namespace Packing;
 
 namespace {
@@ -33,13 +36,10 @@ export {
 		void StoreTangent(const XMFLOAT3& value) { Tangent = EncodeUnitVector(value); }
 	};
 
-	struct VertexPositionNormalTangentBones {
+	struct VertexPositionNormalTangentSkin {
 		XMFLOAT3 Position;
-		float _;
 		XMFLOAT2 Normal, Tangent;
-		struct {
-			uint32_t ID = ~0u;
-			float Weight{};
-		} Bones[4];
+		uint16_t4 Joints;
+		XMFLOAT3 Weights;
 	};
 }

@@ -11,11 +11,10 @@ module;
 
 export module Scene;
 
-import Animation;
 import CommandList;
 import DeviceContext;
+import GLTFLoader;
 import Math;
-import Model;
 import RaytracingHelpers;
 import ResourceHelpers;
 import SkeletalMeshSkinning;
@@ -24,6 +23,7 @@ import TextureHelpers;
 using namespace DirectX;
 using namespace DirectX::RaytracingHelpers;
 using namespace DirectX::SimpleMath;
+using namespace GLTFLoader;
 using namespace Math;
 using namespace ResourceHelpers;
 using namespace std;
@@ -151,7 +151,7 @@ export {
 
 					if (!empty(renderObjectDesc.Animation)) {
 						renderObject.AnimationCollection = *AnimationCollections.at(renderObjectDesc.Animation);
-						renderObject.AnimationCollection.SetBoneInfo(renderObject.Model.BoneInfo);
+						renderObject.AnimationCollection.Bind(renderObject.Model.SkinJoints);
 					}
 
 					RenderObjects.emplace_back(renderObject);
@@ -184,6 +184,7 @@ export {
 			for (const auto& renderObject : RenderObjects) {
 				for (const auto& meshNode : renderObject.Model.MeshNodes) {
 					const auto Transform = [&] {
+						const auto ZFlip = Matrix::CreateScale(1, 1, -1);
 						const auto To3x4 = [](const Matrix& matrix) {
 							XMFLOAT3X4 ret;
 							XMStoreFloat3x4(&ret, matrix);
@@ -191,11 +192,12 @@ export {
 						};
 						if (const auto& animationCollection = renderObject.AnimationCollection; !empty(animationCollection)) {
 							const auto& globalTransforms = animationCollection[animationCollection.GetSelectedIndex()].GetGlobalTransforms();
-							if (const auto pGlobalTransform = globalTransforms.find(meshNode->Name); pGlobalTransform != cend(globalTransforms)) {
-								return To3x4(pGlobalTransform->second * renderObject.Transform());
+							if (const auto pGlobalTransform = globalTransforms.find(meshNode->NodeName);
+								pGlobalTransform != cend(globalTransforms)) {
+								return To3x4(pGlobalTransform->second * ZFlip * renderObject.Transform());
 							}
 						}
-						return To3x4(meshNode->GlobalTransform * renderObject.Transform());
+						return To3x4(meshNode->GlobalTransform * ZFlip * renderObject.Transform());
 					};
 					InstanceData instanceData;
 					instanceData.FirstGeometryIndex = objectIndex;
@@ -222,10 +224,8 @@ export {
 					continue;
 				}
 
-				const auto& model = renderObject.Model;
-
 				const auto& animationCollection = renderObject.AnimationCollection;
-				if (empty(animationCollection) || !animationCollection.HasBoneInfo()) {
+				if (empty(animationCollection) || !animationCollection.IsSkinned()) {
 					continue;
 				}
 
@@ -234,9 +234,14 @@ export {
 					continue;
 				}
 
-				auto copied = false;
+				for (const auto& meshNode : renderObject.Model.MeshNodes) {
+					const auto pSkeletalTransforms = skeletalTransforms.find(meshNode->NodeName);
+					if (pSkeletalTransforms == cend(skeletalTransforms)) {
+						continue;
+					}
 
-				for (const auto& meshNode : model.MeshNodes) {
+					commandList.Copy(*meshNode->SkeletalTransforms, pSkeletalTransforms->second);
+
 					for (const auto& mesh : meshNode->Meshes) {
 						if (!mesh->SkeletalVertices) {
 							continue;
@@ -248,15 +253,9 @@ export {
 							prepared = true;
 						}
 
-						if (!copied) {
-							commandList.Copy(*model.SkeletalTransforms, skeletalTransforms);
-
-							copied = true;
-						}
-
 						m_skeletalMeshSkinning.GPUBuffers = {
 							.SkeletalVertices = mesh->SkeletalVertices.get(),
-							.SkeletalTransforms = model.SkeletalTransforms.get(),
+							.SkeletalTransforms = meshNode->SkeletalTransforms.get(),
 							.Vertices = mesh->Vertices.get(),
 							.MotionVectors = mesh->MotionVectors.get()
 						};
@@ -285,7 +284,7 @@ export {
 
 					const auto& animationCollection = renderObject.AnimationCollection;
 					const auto isAnimated = !empty(animationCollection)
-						&& animationCollection.HasBoneInfo()
+						&& animationCollection.IsSkinned()
 						&& !empty(animationCollection[animationCollection.GetSelectedIndex()].GetSkeletalTransforms());
 
 					for (const auto& meshNode : model.MeshNodes) {
@@ -308,8 +307,8 @@ export {
 							_geometryDescs.emplace_back(CreateGeometryDesc(
 								*mesh->Vertices, *mesh->Indices,
 								mesh->MaterialIndex == ~0u || model.Materials[mesh->MaterialIndex].AlphaMode == AlphaMode::Opaque ?
-								D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE)
-							);
+								D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE
+							));
 						}
 
 						if (const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{
@@ -359,6 +358,7 @@ export {
 						.InstanceID = instanceData.FirstGeometryIndex,
 						.InstanceMask = renderObject.IsVisible ? ~0u : 0,
 						.InstanceContributionToHitGroupIndex = instanceData.FirstGeometryIndex,
+						.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE,
 						.AccelerationStructure = accelerationStructureManager.GetAccelStructGPUVA(m_bottomLevelAccelerationStructureIDs.at(meshNode.get()).first)
 						});
 					reinterpret_cast<XMFLOAT3X4&>(instanceDesc.Transform) = instanceData.ObjectToWorld;
