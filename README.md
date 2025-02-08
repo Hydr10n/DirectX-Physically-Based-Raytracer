@@ -93,5 +93,5 @@ Real-time physically based rendering using GPU capable of DirectX Raytracing.
 - Cornell Box
 <figure align="center">
 	<img src="Screenshots/Cornell Box.png">
-	<figcaption>1 SPP, RTXDI (ReSTIR DI) + RTXGI (SHARC) + NVIDIA DLAA Ray Reconstruction</figcaption>
+	<figcaption>1 SPP, NVIDIA RTXDI (ReSTIR DI) + RTXGI (SHARC) + DLAA Ray Reconstruction</figcaption>
 </figure>
