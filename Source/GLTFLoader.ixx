@@ -286,9 +286,15 @@ namespace {
 
 		{
 			const auto CreateBuffer = [&](auto& buffer, const auto& data, bool isStructuredSRV = true, bool hasSRV = true) {
-				buffer = GPUBuffer::CreateDefault<typename remove_cvref_t<decltype(data)>::value_type>(deviceContext, size(data));
+				using T = typename remove_cvref_t<decltype(data)>::value_type;
+				const auto format = &buffer == &mesh->Indices ?
+					(indexStride == sizeof(uint16_t) ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT) : DXGI_FORMAT_UNKNOWN;
+				buffer = GPUBuffer::CreateDefault<T>(deviceContext, size(data), format);
 				if (hasSRV) {
-					buffer->CreateSRV(isStructuredSRV ? BufferSRVType::Structured : BufferSRVType::Raw);
+					buffer->CreateSRV(
+						format == DXGI_FORMAT_UNKNOWN ?
+						(isStructuredSRV ? BufferSRVType::Structured : BufferSRVType::Raw) : BufferSRVType::Typed
+					);
 				}
 				if (::data(data) != nullptr) {
 					commandList.Copy(*buffer, data);
