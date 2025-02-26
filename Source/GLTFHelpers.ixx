@@ -13,11 +13,12 @@ module;
 
 #include "directxtk12/SimpleMath.h"
 
-export module GLTFLoader;
+export module GLTFHelpers;
 
 export import Animation;
 import CommandList;
 import DeviceContext;
+import ErrorHelpers;
 import GPUBuffer;
 import Material;
 export import Model;
@@ -26,7 +27,9 @@ import ResourceHelpers;
 import TextureHelpers;
 
 using namespace DirectX;
+using namespace DirectX::PackedVector;
 using namespace DirectX::SimpleMath;
+using namespace ErrorHelpers;
 using namespace Math;
 using namespace ResourceHelpers;
 using namespace std;
@@ -59,7 +62,7 @@ namespace {
 	}
 
 	auto GetDefaultSceneIndex(const fastgltf::Asset& asset) {
-		return clamp<size_t>(asset.defaultScene.has_value() ? asset.defaultScene.value() : 0, 0, size(asset.scenes));
+		return clamp<size_t>(asset.defaultScene ? asset.defaultScene.value() : 0, 0, size(asset.scenes));
 	}
 
 	struct StoredSkinJoints {
@@ -75,19 +78,17 @@ namespace {
 		bool IsSameAs(const path& filePath) const { return FilePath == filePath || AreSamePath(FilePath, filePath); }
 	};
 
-	void LoadTextures(
-		const path& directoryPath,
-		const fastgltf::Asset& asset, const fastgltf::TextureInfo& textureInfo,
-		bool forceSRGB, shared_ptr<Texture>& texture,
-		vector<LoadedTexture>& loadedTextures,
+	void LoadTexture(
+		const path& directoryPath, const fastgltf::Asset& asset, const fastgltf::TextureInfo& textureInfo,
+		bool forceSRGB, shared_ptr<Texture>& texture, vector<LoadedTexture>& loadedTextures,
 		CommandList& commandList
 	) {
 		size_t imageIndex;
 		if (const auto& texture = asset.textures.at(textureInfo.textureIndex);
-			texture.ddsImageIndex.has_value()) {
+			texture.ddsImageIndex) {
 			imageIndex = texture.ddsImageIndex.value();
 		}
-		else if (texture.imageIndex.has_value()) {
+		else if (texture.imageIndex) {
 			imageIndex = texture.imageIndex.value();
 		}
 		else {
@@ -100,7 +101,7 @@ namespace {
 				});
 				pLoadedTexture == cend(loadedTextures)) {
 				const auto format = mimeType == fastgltf::MimeType::DDS ? "dds" : "";
-				texture = LoadTexture(commandList, format, data, forceSRGB);
+				texture = ::LoadTexture(commandList, format, data, forceSRGB);
 				texture->CreateSRV();
 
 				loadedTextures.emplace_back(::data(data), "", texture);
@@ -127,7 +128,7 @@ namespace {
 				return value.IsSameAs(filePath);
 				});
 				pLoadedTexture == cend(loadedTextures)) {
-				texture = LoadTexture(commandList, filePath, forceSRGB);
+				texture = ::LoadTexture(commandList, filePath, forceSRGB);
 				texture->CreateSRV();
 
 				loadedTextures.emplace_back(nullptr, filePath, texture);
@@ -156,7 +157,7 @@ namespace {
 			fastgltf::iterateAccessor<XMFLOAT3>(
 				asset, accessor,
 				[&](const XMFLOAT3& value) {
-					vertices.emplace_back(Mesh::VertexType{ .Position = reinterpret_cast<const XMFLOAT3&>(value) });
+					vertices.emplace_back(Mesh::VertexType{ .Position = value });
 				}
 			);
 		}
@@ -166,15 +167,15 @@ namespace {
 
 		vector<uint8_t> indices;
 		size_t indexStride;
-		if (primitive.indicesAccessor.has_value()) {
+		if (primitive.indicesAccessor) {
 			const auto& accessor = asset.accessors[primitive.indicesAccessor.value()];
-			const auto Iterate = [&]<typename T>() {
+			const auto Iterate = [&]<typename T> {
 				indexStride = sizeof(T);
-				indices.resize(accessor.count * indexStride);
+				indices.resize(accessor.count* indexStride);
 				fastgltf::iterateAccessorWithIndex<T>(
 					asset, accessor,
 					[&](T value, size_t index) {
-						*(reinterpret_cast<T*>(data(indices)) + index) = value;
+						reinterpret_cast<T*>(data(indices))[index] = value;
 					}
 				);
 			};
@@ -189,83 +190,107 @@ namespace {
 			return nullptr;
 		}
 
-		auto hasTextureCoordinates = false;
-		if (const auto attribute = primitive.findAttribute("TEXCOORD_0"); attribute != cend(primitive.attributes)) {
-			const auto& accessor = asset.accessors.at(attribute->accessorIndex);
-			fastgltf::iterateAccessorWithIndex<XMFLOAT2>(
-				asset, accessor,
-				[&](const XMFLOAT2& value, size_t index) {
-					vertices[index].StoreTextureCoordinate(value);
+		const auto normalAttribute = primitive.findAttribute("NORMAL"), tangentAttribute = primitive.findAttribute("Tangent");
+
+		vector<XMFLOAT2> textureCoordinates;
+		bool hasTextureCoordinates[2]{};
+		for (const auto i : { 0, 1 }) {
+			if (const auto attribute = primitive.findAttribute(format("TEXCOORD_{}", i));
+				attribute != cend(primitive.attributes)) {
+				const auto shouldStoreTextureCoordinates = !i
+					&& normalAttribute != cend(primitive.attributes) && tangentAttribute == cend(primitive.attributes);
+				fastgltf::iterateAccessorWithIndex<XMFLOAT2>(
+					asset, asset.accessors.at(attribute->accessorIndex),
+					[&](const XMFLOAT2& value, size_t index) {
+						vertices[index].StoreTextureCoordinate(value, i);
+
+				if (shouldStoreTextureCoordinates) {
+					if (empty(textureCoordinates)) {
+						textureCoordinates.reserve(size(vertices));
+					}
+					textureCoordinates.emplace_back(value);
 				}
-			);
-			hasTextureCoordinates = true;
+					}
+				);
+
+				hasTextureCoordinates[i] = true;
+			}
 		}
 
-		auto hasTangents = false;
-		if (const auto attribute = primitive.findAttribute("NORMAL"); attribute != cend(primitive.attributes)) {
-			const auto& accessor = asset.accessors.at(attribute->accessorIndex);
+		auto hasNormals = false, hasTangents = false;
+		if (normalAttribute != cend(primitive.attributes)) {
+			vector<XMFLOAT3> normals;
+			const auto shouldStoreNormals = !empty(textureCoordinates) && tangentAttribute == cend(primitive.attributes);
 			fastgltf::iterateAccessorWithIndex<XMFLOAT3>(
-				asset, accessor,
+				asset, asset.accessors.at(normalAttribute->accessorIndex),
 				[&](const XMFLOAT3& value, size_t index) {
 					vertices[index].StoreNormal(value);
+
+			if (shouldStoreNormals) {
+				if (empty(normals)) {
+					normals.reserve(size(vertices));
+				}
+				normals.emplace_back(value);
+			}
 				}
 			);
 
-			if (const auto attribute = primitive.findAttribute("TANGENT"); attribute != cend(primitive.attributes)) {
-				const auto& accessor = asset.accessors.at(attribute->accessorIndex);
+			hasNormals = true;
+
+			if (tangentAttribute != cend(primitive.attributes)) {
 				fastgltf::iterateAccessorWithIndex<XMFLOAT4>(
-					asset, accessor,
+					asset, asset.accessors.at(tangentAttribute->accessorIndex),
 					[&](const XMFLOAT4& value, size_t index) {
 						vertices[index].StoreTangent(reinterpret_cast<const XMFLOAT3&>(value));
 					}
 				);
+
 				hasTangents = true;
 			}
-		}
-		else {
-			vector<XMFLOAT3> positions, normals(size(vertices));
-			positions.reserve(size(vertices));
-			for (const auto& vertex : vertices) {
-				positions.emplace_back(vertex.Position);
-			}
-			const auto ComputeNormals = [&]<typename T>() {
-				::ComputeNormals(
-					reinterpret_cast<const T*>(data(indices)), size(indices) / 3 / indexStride,
-					data(positions), size(positions),
-					CNORM_DEFAULT,
-					data(normals)
-				);
-			};
-			if (indexStride == sizeof(uint16_t)) {
-				ComputeNormals.operator() < uint16_t > ();
-			}
-			else {
-				ComputeNormals.operator() < uint32_t > ();
-			}
-			for (size_t i = 0; const auto & normal : normals) {
-				vertices[i++].StoreNormal(normal);
+			else if (!empty(textureCoordinates)) {
+				vector<XMFLOAT3> positions, tangents(size(vertices));
+				positions.reserve(size(vertices));
+				for (const auto& vertex : vertices) {
+					positions.emplace_back(vertex.Position);
+				}
+				const auto ComputeTangentFrame = [&]<typename T> {
+					ThrowIfFailed(::ComputeTangentFrame(
+						reinterpret_cast<const T*>(data(indices)), size(indices) / 3 / indexStride,
+						data(positions), data(normals), data(textureCoordinates), size(vertices),
+						data(tangents), nullptr
+					));
+				};
+				if (indexStride == sizeof(uint16_t)) {
+					ComputeTangentFrame.operator() < uint16_t > ();
+				}
+				else {
+					ComputeTangentFrame.operator() < uint32_t > ();
+				}
+				for (size_t i = 0; const auto & tangent : tangents) {
+					vertices[i++].StoreTangent(tangent);
+				}
+
+				hasTangents = true;
 			}
 		}
 
 		auto hasJoints = false;
 		vector<Mesh::SkeletalVertexType> skeletalVertices;
 		if (const auto attribute = primitive.findAttribute("JOINTS_0"); attribute != cend(primitive.attributes)) {
-			const auto& accessor = asset.accessors.at(attribute->accessorIndex);
 			skeletalVertices.reserve(size(vertices));
 			fastgltf::iterateAccessor<fastgltf::math::u16vec4>(
-				asset, accessor,
+				asset, asset.accessors.at(attribute->accessorIndex),
 				[&](const fastgltf::math::u16vec4& value) {
-					skeletalVertices.emplace_back(Mesh::SkeletalVertexType{ .Joints = reinterpret_cast<const uint16_t4&>(value) });
+					skeletalVertices.emplace_back(Mesh::SkeletalVertexType{ .Joints = reinterpret_cast<const XMUSHORT4&>(value) });
 				}
 			);
 
 			if (const auto attribute = primitive.findAttribute("WEIGHTS_0"); attribute != cend(primitive.attributes)) {
-				const auto& accessor = asset.accessors.at(attribute->accessorIndex);
 				fastgltf::iterateAccessorWithIndex<XMFLOAT4>(
-					asset, accessor,
+					asset, asset.accessors.at(attribute->accessorIndex),
 					[&](const XMFLOAT4& value, size_t index) {
 						auto& skeletalVertex = skeletalVertices[index];
-				skeletalVertex.Weights = reinterpret_cast<const XMFLOAT3&>(value);
+				skeletalVertex.Weights = value;
 
 				const auto& vertex = vertices[index];
 				skeletalVertex.Position = vertex.Position;
@@ -279,8 +304,9 @@ namespace {
 
 		const auto mesh = make_shared<Mesh>();
 
+		mesh->HasNormals = hasNormals;
 		mesh->HasTangents = hasTangents;
-		mesh->HasTextureCoordinates = hasTextureCoordinates;
+		ranges::copy(hasTextureCoordinates, mesh->HasTextureCoordinates);
 
 		const auto& deviceContext = commandList.GetDeviceContext();
 
@@ -318,87 +344,86 @@ namespace {
 			}
 		}
 
-		if (primitive.materialIndex.has_value()) {
+		if (primitive.materialIndex) {
 			mesh->MaterialIndex = static_cast<uint32_t>(size(model.Materials));
 
 			const auto& material = asset.materials.at(primitive.materialIndex.value());
 
-			model.Materials.emplace_back(Material{
+			auto& _material = model.Materials.emplace_back(Material{
 				.BaseColor = reinterpret_cast<const XMFLOAT4&>(material.pbrData.baseColorFactor),
-				.EmissiveColor = reinterpret_cast<const XMFLOAT3&>(material.emissiveFactor),
 				.EmissiveStrength = material.emissiveStrength,
+				.EmissiveColor = reinterpret_cast<const XMFLOAT3&>(material.emissiveFactor),
 				.Metallic = material.pbrData.metallicFactor,
 				.Roughness = material.pbrData.roughnessFactor,
-				.Transmission = material.transmission ? material.transmission.get()->transmissionFactor : 0,
 				.IOR = material.ior,
 				.AlphaMode = static_cast<AlphaMode>(material.alphaMode),
 				.AlphaCutoff = material.alphaCutoff
 				});
+			if (material.transmission) {
+				_material.Transmission = material.transmission->transmissionFactor;
+			}
 
-			if (hasTextureCoordinates) {
+			if (hasTextureCoordinates[0] || hasTextureCoordinates[1]) {
 				mesh->TextureIndex = static_cast<uint32_t>(size(model.Textures));
 
 				for (auto& textures = model.Textures.emplace_back();
 					const auto i : views::iota(0u, static_cast<uint32_t>(TextureMapType::Count))) {
-					const fastgltf::TextureInfo* textureInfo;
+					const fastgltf::TextureInfo* textureInfo = nullptr;
 					auto forceSRGB = false;
-					switch (static_cast<TextureMapType>(i)) {
+					switch (i) {
 						case TextureMapType::BaseColor:
 						{
-							if (!material.pbrData.baseColorTexture.has_value()) {
-								continue;
+							if (material.pbrData.baseColorTexture) {
+								textureInfo = &material.pbrData.baseColorTexture.value();
+								forceSRGB = true;
 							}
-
-							textureInfo = &material.pbrData.baseColorTexture.value();
-							forceSRGB = true;
 						}
 						break;
 
 						case TextureMapType::EmissiveColor:
 						{
-							if (!material.emissiveTexture.has_value()) {
-								continue;
+							if (material.emissiveTexture) {
+								textureInfo = &material.emissiveTexture.value();
+								forceSRGB = true;
 							}
-
-							textureInfo = &material.emissiveTexture.value();
-							forceSRGB = true;
 						}
 						break;
 
 						case TextureMapType::MetallicRoughness:
 						{
-							if (!material.pbrData.metallicRoughnessTexture.has_value()) {
-								continue;
+							if (material.pbrData.metallicRoughnessTexture) {
+								textureInfo = &material.pbrData.metallicRoughnessTexture.value();
 							}
-
-							textureInfo = &material.pbrData.metallicRoughnessTexture.value();
 						}
 						break;
 
 						case TextureMapType::Transmission:
 						{
-							if (!material.transmission || !material.transmission->transmissionTexture.has_value()) {
-								continue;
+							if (material.transmission && material.transmission->transmissionTexture) {
+								textureInfo = &material.transmission->transmissionTexture.value();
 							}
-
-							textureInfo = &material.transmission->transmissionTexture.value();
 						}
 						break;
 
 						case TextureMapType::Normal:
 						{
-							if (!material.normalTexture.has_value()) {
-								continue;
+							if (hasTangents && material.normalTexture) {
+								textureInfo = &material.normalTexture.value();
 							}
-
-							textureInfo = &material.normalTexture.value();
 						}
 						break;
-
-						default: continue;
 					}
 
-					LoadTextures(directoryPath, asset, *textureInfo, forceSRGB, textures[i], loadedTextures, commandList);
+					if (textureInfo != nullptr
+						&& textureInfo->texCoordIndex < 2 && hasTextureCoordinates[textureInfo->texCoordIndex]) {
+						auto& [Texture, TextureCoordinateIndex] = textures[i];
+						LoadTexture(
+							directoryPath, asset, *textureInfo,
+							forceSRGB, Texture, loadedTextures,
+							commandList
+						);
+						TextureCoordinateIndex = textureInfo->texCoordIndex;
+					}
 				}
 			}
 		}
@@ -407,8 +432,8 @@ namespace {
 	}
 }
 
-export namespace GLTFLoader {
-	void Load(Model& model, const path& filePath, CommandList& commandList) {
+export namespace GLTFHelpers {
+	void LoadModel(Model& model, const path& filePath, CommandList& commandList) {
 		if (empty(filePath)) {
 			throw invalid_argument("Model file path cannot be empty");
 		}
@@ -434,7 +459,7 @@ export namespace GLTFLoader {
 		iterateSceneNodes(
 			asset, sceneIndex, fastgltf::math::fmat4x4(),
 			[&](fastgltf::Node& node, const fastgltf::math::fmat4x4& matrix) {
-				if (node.meshIndex.has_value()) {
+				if (node.meshIndex) {
 					if (const auto& mesh = asset.meshes.at(node.meshIndex.value()); !empty(mesh.primitives)) {
 						auto meshNode = make_shared<MeshNode>();
 
@@ -443,19 +468,18 @@ export namespace GLTFLoader {
 
 						meshNode->GlobalTransform = reinterpret_cast<const Matrix&>(matrix);
 
-						if (node.skinIndex.has_value()) {
+						if (node.skinIndex) {
 							size_t skinJointCount = 0;
 							if (const auto pStoredSkinJoints = ranges::find_if(storedSkinJoints, [&](const auto& value) {
 								return value.Index == node.skinIndex.value();
 								});
 								pStoredSkinJoints == cend(storedSkinJoints)) {
 								const auto& skin = asset.skins.at(node.skinIndex.value());
-								if (skin.inverseBindMatrices.has_value()) {
+								if (skin.inverseBindMatrices) {
 									auto skinJoints = make_shared<vector<SkinJoint>>();
 									skinJoints->reserve(size(skin.joints));
-									const auto& accessor = asset.accessors.at(skin.inverseBindMatrices.value());
 									fastgltf::iterateAccessor<fastgltf::math::fmat4x4>(
-										asset, accessor,
+										asset, asset.accessors.at(skin.inverseBindMatrices.value()),
 										[&](const fastgltf::math::fmat4x4& value) {
 											skinJoints->emplace_back(
 												string(asset.nodes.at(skin.joints.at(size(*skinJoints))).name),
@@ -505,20 +529,7 @@ export namespace GLTFLoader {
 		);
 	}
 
-	struct ModelDictionaryLoader {
-		void operator()(Model& resource, const path& filePath, const DeviceContext& deviceContext) const {
-			CommandList commandList(deviceContext);
-			commandList.Begin();
-
-			Load(resource, filePath, commandList);
-
-			commandList.End();
-		}
-	};
-
-	using ModelDictionary = ResourceDictionary<string, Model, ModelDictionaryLoader>;
-
-	void Load(AnimationCollection& animations, const path& filePath) {
+	void LoadAnimation(AnimationCollection& animations, const path& filePath) {
 		if (empty(filePath)) {
 			throw invalid_argument("Animation file path cannot be empty");
 		}
@@ -556,7 +567,7 @@ export namespace GLTFLoader {
 			float duration = 0;
 			unordered_map<string, KeyframeCollection> keyframeCollections;
 			for (const auto& channel : animation.channels) {
-				if (!channel.nodeIndex.has_value()) {
+				if (!channel.nodeIndex) {
 					continue;
 				}
 
@@ -643,10 +654,4 @@ export namespace GLTFLoader {
 			animations.emplace_back(duration, move(keyframeCollections), targetNodes).Name = animation.name;
 		}
 	}
-
-	struct AnimationCollectionDictionaryLoader {
-		void operator()(AnimationCollection& resource, const path& filePath) const { Load(resource, filePath); }
-	};
-
-	using AnimationCollectionDictionary = ResourceDictionary<string, AnimationCollection, AnimationCollectionDictionaryLoader>;
 }

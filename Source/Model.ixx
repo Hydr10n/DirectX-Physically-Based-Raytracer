@@ -6,6 +6,8 @@ module;
 
 #include "directxtk12/SimpleMath.h"
 
+#include "ml.h"
+
 #include "eventpp/callbacklist.h"
 
 export module Model;
@@ -23,21 +25,26 @@ using namespace std;
 
 export {
 	struct Mesh {
-		using VertexType = VertexPositionNormalTextureTangent;
+		using VertexType = VertexPositionNormalTangentTexture;
 		using SkeletalVertexType = VertexPositionNormalTangentSkin;
-		using MotionVectorType = XMUINT2;
+		using MotionVectorType = float16_t4;
 		shared_ptr<GPUBuffer> Vertices, Indices, SkeletalVertices, MotionVectors;
 
-		bool HasTextureCoordinates{}, HasTangents{};
+		bool HasNormals{}, HasTangents{}, HasTextureCoordinates[2]{};
 
 		uint32_t MaterialIndex = ~0u, TextureIndex = ~0u;
 
 		VertexDesc GetVertexDesc() const {
 			return {
 				.Stride = sizeof(VertexType),
-				.NormalOffset = offsetof(VertexType, Normal),
-				.TextureCoordinateOffset = static_cast<uint32_t>(HasTextureCoordinates ? offsetof(VertexType, TextureCoordinate) : ~0u),
-				.TangentOffset = static_cast<uint32_t>(HasTangents ? offsetof(VertexType, Tangent) : ~0u)
+				.AttributeOffsets{
+					.Normal = HasNormals ? static_cast<uint32_t>(offsetof(VertexType, Normal)) : ~0u,
+					.Tangent = HasTangents ? static_cast<uint32_t>(offsetof(VertexType, Tangent)) : ~0u,
+					.TextureCoordinates{
+						HasTextureCoordinates[0] ? static_cast<uint32_t>(offsetof(VertexType, TextureCoordinates[0])) : ~0u,
+						HasTextureCoordinates[1] ? static_cast<uint32_t>(offsetof(VertexType, TextureCoordinates[1])) : ~0u
+					}
+				}
 			};
 		}
 	};
@@ -72,7 +79,7 @@ export {
 		shared_ptr<SkinJointDictionary> SkinJoints;
 
 		vector<Material> Materials;
-		vector<array<shared_ptr<Texture>, to_underlying(TextureMapType::Count)>> Textures;
+		vector<array<tuple<shared_ptr<Texture>, uint32_t/*TextureCoordinateIndex*/>, TextureMapType::Count>> Textures;
 
 		Model() = default;
 
@@ -107,8 +114,9 @@ export {
 
 							newMesh->Indices = mesh->Indices;
 							newMesh->SkeletalVertices = mesh->SkeletalVertices;
-							newMesh->HasTextureCoordinates = mesh->HasTextureCoordinates;
+							newMesh->HasNormals = mesh->HasNormals;
 							newMesh->HasTangents = mesh->HasTangents;
+							ranges::copy(mesh->HasTextureCoordinates, newMesh->HasTextureCoordinates);
 							newMesh->MaterialIndex = mesh->MaterialIndex;
 							newMesh->TextureIndex = mesh->TextureIndex;
 

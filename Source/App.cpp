@@ -452,8 +452,8 @@ private:
 			CreateTexture(TextureNames::Transmission, DXGI_FORMAT_R8_UNORM);
 			CreateTexture(TextureNames::PreviousIOR, DXGI_FORMAT_R16_FLOAT);
 			CreateTexture(TextureNames::IOR, DXGI_FORMAT_R16_FLOAT);
-			CreateTexture(TextureNames::Radiance, m_HDRTextureFormat, true);
 			CreateTexture(TextureNames::LightRadiance, m_HDRTextureFormat, true);
+			CreateTexture(TextureNames::Radiance, m_HDRTextureFormat, true);
 
 			{
 				m_NRD = make_unique<NRD>(
@@ -479,7 +479,7 @@ private:
 					CreateTexture(TextureNames::Specular, DXGI_FORMAT_R16G16B16A16_FLOAT, true, false);
 				}
 				if (isDLSSRayReconstructionAvailable) {
-					CreateTexture(TextureNames::SpecularHitDistance, DXGI_FORMAT_R32_FLOAT, true, false);
+					CreateTexture(TextureNames::SpecularHitDistance, DXGI_FORMAT_R16_FLOAT, true, false);
 				}
 
 				SelectDenoiser();
@@ -835,7 +835,7 @@ private:
 	}
 
 	void CreateStructuredBuffers() {
-		const auto CreateBuffer = [&]<typename T>(T, auto & buffer, UINT64 capacity) {
+		const auto CreateBuffer = [&]<typename T>(T, auto & buffer, uint64_t capacity) {
 			buffer = GPUBuffer::CreateDefault<T>(m_deviceResources->GetDeviceContext(), capacity);
 		};
 		if (const auto instanceCount = size(m_scene->GetInstanceData())) {
@@ -1014,19 +1014,19 @@ private:
 		{
 			SceneData sceneData{
 				.IsStatic = m_scene->IsStatic(),
-				.EnvironmentLightColor = m_scene->EnvironmentLightColor
+				.EnvironmentLightColor = m_scene->EnvironmentLight.Color
 			};
-			if (m_scene->EnvironmentLightTexture.Texture) {
-				sceneData.IsEnvironmentLightTextureCubeMap = m_scene->EnvironmentLightTexture.Texture->IsCubeMap();
-				sceneData.ResourceDescriptorIndices.EnvironmentLightTexture = m_scene->EnvironmentLightTexture.Texture->GetSRVDescriptor();
-				XMStoreFloat3x4(&sceneData.EnvironmentLightTextureTransform, m_scene->EnvironmentLightTexture.Transform());
+			XMStoreFloat3x4(&sceneData.EnvironmentLightTransform, Matrix::CreateFromQuaternion(m_scene->EnvironmentLight.Rotation));
+			if (m_scene->EnvironmentLight.Texture) {
+				sceneData.IsEnvironmentLightTextureCubeMap = m_scene->EnvironmentLight.Texture->IsCubeMap();
+				sceneData.EnvironmentLightTextureDescriptor = m_scene->EnvironmentLight.Texture->GetSRVDescriptor();
 			}
 			commandList.Copy(*m_GPUBuffers.SceneData, initializer_list{ sceneData });
 		}
 
 		vector<InstanceData> instanceData(size(m_scene->GetInstanceData()));
 		vector<ObjectData> objectData(m_scene->GetObjectCount());
-		for (UINT instanceIndex = 0; const auto & renderObject : m_scene->RenderObjects) {
+		for (uint32_t instanceIndex = 0; const auto & renderObject : m_scene->RenderObjects) {
 			for (const auto& meshNode : renderObject.Model.MeshNodes) {
 				const auto& _instanceData = m_scene->GetInstanceData()[instanceIndex];
 				instanceData[instanceIndex++] = {
@@ -1035,34 +1035,27 @@ private:
 					.ObjectToWorld = _instanceData.ObjectToWorld
 				};
 
-				for (UINT geometryIndex = 0; const auto & mesh : meshNode->Meshes) {
+				for (uint32_t geometryIndex = 0; const auto & mesh : meshNode->Meshes) {
 					auto& _objectData = objectData[_instanceData.FirstGeometryIndex + geometryIndex];
 
 					_objectData.VertexDesc = mesh->GetVertexDesc();
 
 					_objectData.Material = mesh->MaterialIndex == ~0u ? Material() : renderObject.Model.Materials[mesh->MaterialIndex];
 
-					_objectData.ResourceDescriptorIndices.Mesh = {
+					_objectData.MeshDescriptors = {
 						.Vertices = mesh->Vertices->GetSRVDescriptor(BufferSRVType::Raw),
 						.Indices = mesh->Indices->GetSRVDescriptor(BufferSRVType::Typed),
 						.MotionVectors = mesh->MotionVectors ? mesh->MotionVectors->GetSRVDescriptor(BufferSRVType::Structured) : ~0u
 					};
 
 					if (mesh->TextureIndex != ~0u) {
-						for (size_t i = 0; const auto & texture : renderObject.Model.Textures[mesh->TextureIndex]) {
-							if (texture) {
-								const auto index = texture->GetSRVDescriptor().GetIndex();
-								switch (auto& indices = _objectData.ResourceDescriptorIndices.Textures;
-								static_cast<TextureMapType>(i)) {
-									case TextureMapType::BaseColor: indices.BaseColor = index; break;
-									case TextureMapType::EmissiveColor: indices.EmissiveColor = index; break;
-									case TextureMapType::Metallic: indices.Metallic = index; break;
-									case TextureMapType::Roughness: indices.Roughness = index; break;
-									case TextureMapType::MetallicRoughness: indices.MetallicRoughness = index; break;
-									case TextureMapType::Transmission: indices.Transmission = index; break;
-									case TextureMapType::Normal: indices.Normal = index; break;
-									default: Throw<out_of_range>("Unsupported texture map type");
-								}
+						for (uint32_t i = 0;
+							const auto & [Texture, TextureCoordinateIndex] : renderObject.Model.Textures[mesh->TextureIndex]) {
+							if (Texture) {
+								_objectData.TextureMapInfoArray[i] = {
+									.Descriptor = Texture->GetSRVDescriptor().GetIndex(),
+									.TextureCoordinateIndex = TextureCoordinateIndex
+								};
 							}
 							i++;
 						}
@@ -1327,10 +1320,6 @@ private:
 
 			case RTXGITechnique::SHARC:
 			{
-				commandList.Clear(*m_SHARC->GPUBuffers.VoxelData);
-
-				m_SHARC->GPUBuffers.Camera = m_GPUBuffers.Camera.get();
-
 				Raytracing::SHARCSettings SHARCSettings{
 					.DownscaleFactor = raytracingSettings.RTXGI.SHARC.DownscaleFactor,
 					.RoughnessThreshold = raytracingSettings.RTXGI.SHARC.RoughnessThreshold,
@@ -1339,8 +1328,6 @@ private:
 				SHARCSettings.SceneScale = raytracingSettings.RTXGI.SHARC.SceneScale;
 				SHARCSettings.IsAntiFireflyEnabled = true;
 				m_raytracing->Render(commandList, scene, *m_SHARC, SHARCSettings);
-
-				swap(m_SHARC->GPUBuffers.PreviousVoxelData, m_SHARC->GPUBuffers.VoxelData);
 			}
 			break;
 		}

@@ -56,8 +56,7 @@ add_executable(${project} WIN32
 	"Source/App.rc"
 	"Source/App.manifest"
 	"External/ImGuiFileDialog/ImGuiFileDialog.cpp"
-	"${AMD_library_path}MemoryAllocator/D3D12/src/D3D12MemAlloc.cpp"
-	"${NVIDIA_library_path}ShaderMake/src/ShaderBlob.cpp")
+	"${AMD_library_path}MemoryAllocator/D3D12/src/D3D12MemAlloc.cpp")
 target_sources(${project} PRIVATE FILE_SET cxx_modules TYPE CXX_MODULES FILES ${modules})
 
 set_target_properties(${project} PROPERTIES CXX_STANDARD 23)
@@ -73,9 +72,7 @@ list(TRANSFORM AMD_CXX_include_directories PREPEND ${AMD_library_path})
 set(Intel_CXX_include_directories "XeSS/inc")
 list(TRANSFORM Intel_CXX_include_directories PREPEND ${Intel_library_path})
 
-set(NVIDIA_CXX_include_directories
-	"NVAPI"
-	"ShaderMake/include")
+set(NVIDIA_CXX_include_directories "NVAPI")
 list(TRANSFORM NVIDIA_CXX_include_directories PREPEND ${NVIDIA_library_path})
 
 target_include_directories(${project} PRIVATE
@@ -110,6 +107,7 @@ target_link_libraries(${project} PRIVATE
 	NRI
 	Rtxdi
 	rtxmu
+	ShaderMakeBlob
 	streamline
 	"${Intel_library_path}XeSS/lib/libxess.lib"
 	"${NVIDIA_library_path}NVAPI/amd64/nvapi64.lib")

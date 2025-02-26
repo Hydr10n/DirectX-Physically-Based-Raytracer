@@ -40,7 +40,7 @@ export struct SkeletalMeshSkinning {
 	}
 
 	void Process(CommandList& commandList) {
-		const auto vertexCount = static_cast<UINT>(GPUBuffers.Vertices->GetCapacity());
+		const auto vertexCount = static_cast<uint32_t>(GPUBuffers.Vertices->GetCapacity());
 
 		commandList.SetState(*GPUBuffers.SkeletalVertices, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 		commandList.SetState(*GPUBuffers.SkeletalTransforms, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);

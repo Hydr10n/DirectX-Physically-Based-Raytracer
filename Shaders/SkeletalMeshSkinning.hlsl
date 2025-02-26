@@ -9,14 +9,14 @@ cbuffer _ : register(b0)
 
 StructuredBuffer<VertexPositionNormalTangentSkin> g_skeletalVertices : register(t0);
 
-struct Float3x4
+struct row_major_float3x4
 {
-	row_major float3x4 Matrix;
+	row_major float3x4 Value;
 };
-StructuredBuffer<Float3x4> g_skeletalTransforms : register(t1);
+StructuredBuffer<row_major_float3x4> g_skeletalTransforms : register(t1);
 
-RWStructuredBuffer<VertexPositionNormalTextureTangent> g_vertices : register(u0);
-RWStructuredBuffer<uint2> g_motionVectors : register(u1);
+RWStructuredBuffer<VertexPositionNormalTangentTexture> g_vertices : register(u0);
+RWStructuredBuffer<float16_t4> g_motionVectors : register(u1);
 
 [RootSignature(
 	"RootConstants(num32BitConstants=1, b0),"
@@ -46,17 +46,17 @@ void main(uint vertexIndex : SV_DispatchThreadID)
 	for (uint i = 0; i < 4; i++)
 	{
 		const uint joint = skeletalVertex.Joints[i];
-		transform += weights[i] * g_skeletalTransforms[joint].Matrix;
+		transform += weights[i] * g_skeletalTransforms[joint].Value;
 	}
 
 	const float3
 		position = Geometry::AffineTransform(transform, skeletalVertex.Position),
 		motionVector = g_vertices[vertexIndex].Position - position,
-		normal = Packing::DecodeUnitVector(skeletalVertex.Normal, true, false),
-		tangent = Packing::DecodeUnitVector(skeletalVertex.Tangent, true, false);
+		normal = Unpack_R16G16B16_SNORM(skeletalVertex.Normal),
+		tangent = Unpack_R16G16B16_SNORM(skeletalVertex.Tangent);
 	const float3x3 rotation = (float3x3)transform;
 	g_vertices[vertexIndex].Position = position;
-	g_vertices[vertexIndex].Normal = Packing::EncodeUnitVector(normalize(Geometry::RotateVector(Math::InverseTranspose(rotation), normal)), true);
-	g_vertices[vertexIndex].Tangent = Packing::EncodeUnitVector(normalize(Geometry::RotateVector(rotation, tangent)), true);
-	g_motionVectors[vertexIndex] = uint2(Packing::Rg16fToUint(motionVector.xy), Packing::Rg16fToUint(float2(motionVector.z, 0)));
+	g_vertices[vertexIndex].Normal = Pack_R16G16B16_SNORM(normalize(Geometry::RotateVector(Math::InverseTranspose(rotation), normal)));
+	g_vertices[vertexIndex].Tangent = Pack_R16G16B16_SNORM(normalize(Geometry::RotateVector(rotation, tangent)));
+	g_motionVectors[vertexIndex].xyz = (float16_t3)motionVector;
 }

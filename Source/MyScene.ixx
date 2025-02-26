@@ -33,8 +33,8 @@ export {
 	JSON_CONVERSION_FUNCTIONS(RenderObjectDesc, Name, Transform, IsVisible, Model, Animation);
 
 	JSON_CONVERSION_FUNCTIONS(decltype(SceneDesc::Camera), Position, Rotation);
-	JSON_CONVERSION_FUNCTIONS(decltype(SceneDesc::EnvironmentLightTexture), FilePath, Transform);
-	JSON_CONVERSION_FUNCTIONS(SceneDesc, Camera, EnvironmentLightColor, EnvironmentLightTexture, Models, Animations, RenderObjects);
+	JSON_CONVERSION_FUNCTIONS(decltype(SceneDesc::EnvironmentLight), Color, Rotation, Texture);
+	JSON_CONVERSION_FUNCTIONS(SceneDesc, Camera, EnvironmentLight, Models, Animations, RenderObjects);
 
 	struct MySceneDesc : SceneDesc {
 		MySceneDesc(const path& filePath) {
@@ -79,7 +79,7 @@ export {
 						ResolvePath(Path);
 					}
 				};
-				ResolvePath(EnvironmentLightTexture.FilePath);
+				ResolvePath(EnvironmentLight.Texture);
 				ResolvePaths(Models);
 				ResolvePaths(Animations);
 			}

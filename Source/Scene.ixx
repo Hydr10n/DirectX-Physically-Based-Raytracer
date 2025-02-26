@@ -13,7 +13,7 @@ export module Scene;
 
 import CommandList;
 import DeviceContext;
-import GLTFLoader;
+import GLTFHelpers;
 import Math;
 import RaytracingHelpers;
 import ResourceHelpers;
@@ -23,7 +23,6 @@ import TextureHelpers;
 using namespace DirectX;
 using namespace DirectX::RaytracingHelpers;
 using namespace DirectX::SimpleMath;
-using namespace GLTFLoader;
 using namespace Math;
 using namespace ResourceHelpers;
 using namespace std;
@@ -50,23 +49,23 @@ export {
 	};
 
 	struct SceneBase {
-		SceneBase() = default;
-
-		virtual ~SceneBase() = default;
-
 		struct {
 			Vector3 Position;
 			Quaternion Rotation;
 		} Camera;
 
-		Color EnvironmentLightColor{ 0, 0, 0, -1 };
+		struct EnvironmentLightBase {
+			Color Color{ 0, 0, 0, -1 };
+			Quaternion Rotation;
+		};
+
+		virtual ~SceneBase() = default;
 	};
 
 	struct SceneDesc : SceneBase {
-		struct {
-			path FilePath;
-			AffineTransform Transform;
-		} EnvironmentLightTexture;
+		struct : EnvironmentLightBase {
+			path Texture;
+		} EnvironmentLight;
 
 		unordered_map<string, path> Models, Animations;
 
@@ -75,18 +74,32 @@ export {
 
 	struct Scene : SceneBase {
 		struct InstanceData {
-			UINT FirstGeometryIndex;
+			uint32_t FirstGeometryIndex;
 			XMFLOAT3X4 PreviousObjectToWorld, ObjectToWorld;
 		};
 
-		struct {
+		struct : EnvironmentLightBase {
 			shared_ptr<Texture> Texture;
-			AffineTransform Transform;
-		} EnvironmentLightTexture;
+		} EnvironmentLight;
 
-		ModelDictionary Models;
+		struct ModelDictionaryLoader {
+			void operator()(Model& resource, const path& filePath, const DeviceContext& deviceContext) const {
+				CommandList commandList(deviceContext);
+				commandList.Begin();
 
-		AnimationCollectionDictionary AnimationCollections;
+				GLTFHelpers::LoadModel(resource, filePath, commandList);
+
+				commandList.End();
+			}
+		};
+		ResourceDictionary<string, Model, ModelDictionaryLoader> Models;
+
+		struct AnimationCollectionDictionaryLoader {
+			void operator()(AnimationCollection& resource, const path& filePath) const {
+				GLTFHelpers::LoadAnimation(resource, filePath);
+			}
+		};
+		ResourceDictionary<string, AnimationCollection, AnimationCollectionDictionaryLoader> AnimationCollections;
 
 		vector<RenderObject> RenderObjects;
 
@@ -119,10 +132,10 @@ export {
 			CommandList commandList(m_deviceContext);
 			commandList.Begin();
 
-			if (!empty(sceneDesc.EnvironmentLightTexture.FilePath)) {
-				EnvironmentLightTexture.Texture = LoadTexture(commandList, ResolveResourcePath(sceneDesc.EnvironmentLightTexture.FilePath), true);
-				EnvironmentLightTexture.Texture->CreateSRV();
-				EnvironmentLightTexture.Transform = sceneDesc.EnvironmentLightTexture.Transform;
+			reinterpret_cast<EnvironmentLightBase&>(EnvironmentLight) = sceneDesc.EnvironmentLight;
+			if (!empty(sceneDesc.EnvironmentLight.Texture)) {
+				EnvironmentLight.Texture = LoadTexture(commandList, ResolveResourcePath(sceneDesc.EnvironmentLight.Texture), true);
+				EnvironmentLight.Texture->CreateSRV();
 			}
 
 			{
@@ -180,7 +193,7 @@ export {
 		auto GetObjectCount() const noexcept { return m_objectCount; }
 
 		void Refresh() {
-			UINT instanceIndex = 0, objectIndex = 0;
+			uint32_t instanceIndex = 0, objectIndex = 0;
 			for (const auto& renderObject : RenderObjects) {
 				for (const auto& meshNode : renderObject.Model.MeshNodes) {
 					const auto Transform = [&] {
@@ -211,7 +224,7 @@ export {
 						m_instanceData.emplace_back(instanceData);
 					}
 					instanceIndex++;
-					objectIndex += static_cast<UINT>(size(meshNode->Meshes));
+					objectIndex += static_cast<uint32_t>(size(meshNode->Meshes));
 				}
 			}
 			m_objectCount = objectIndex;
@@ -351,7 +364,7 @@ export {
 
 			vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
 			instanceDescs.reserve(size(m_instanceData));
-			for (UINT instanceIndex = 0; const auto & renderObject : RenderObjects) {
+			for (uint32_t instanceIndex = 0; const auto & renderObject : RenderObjects) {
 				for (const auto& meshNode : renderObject.Model.MeshNodes) {
 					const auto& instanceData = m_instanceData[instanceIndex++];
 					auto& instanceDesc = instanceDescs.emplace_back(D3D12_RAYTRACING_INSTANCE_DESC{
@@ -383,7 +396,7 @@ export {
 		SkeletalMeshSkinning m_skeletalMeshSkinning;
 
 		vector<InstanceData> m_instanceData;
-		UINT m_objectCount{};
+		uint32_t m_objectCount{};
 
 		vector<uint64_t> m_unreferencedBottomLevelAccelerationStructureIDs;
 		unordered_map<MeshNode*, pair<uint64_t, MeshNode::DestroyEvent::Handle>> m_bottomLevelAccelerationStructureIDs;

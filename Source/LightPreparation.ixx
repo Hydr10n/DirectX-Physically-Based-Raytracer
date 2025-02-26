@@ -50,13 +50,13 @@ export struct LightPreparation {
 	const auto& GetLightBufferParameters() const noexcept { return m_lightBufferParameters; }
 
 	void CountLights() {
-		UINT emissiveMeshCount = 0, emissiveTriangleCount = 0;
+		uint32_t emissiveMeshCount = 0, emissiveTriangleCount = 0;
 		for (const auto& renderObject : m_scene->RenderObjects) {
 			for (const auto& model = renderObject.Model; const auto & meshNode : model.MeshNodes) {
 				for (const auto& mesh : meshNode->Meshes) {
 					if (IsEmissive(model, mesh->MaterialIndex)) {
 						emissiveMeshCount++;
-						emissiveTriangleCount += static_cast<UINT>(mesh->Indices->GetCapacity()) / 3;
+						emissiveTriangleCount += static_cast<uint32_t>(mesh->Indices->GetCapacity()) / 3;
 					}
 				}
 			}
@@ -76,12 +76,12 @@ export struct LightPreparation {
 	void PrepareResources(CommandList& commandList, GPUBuffer& lightIndices) {
 		vector _lightIndices(m_scene->GetObjectCount(), RTXDI_INVALID_LIGHT_INDEX);
 		vector<Task> tasks;
-		for (UINT instanceIndex = 0, lightBufferOffset = 0; const auto & renderObject : m_scene->RenderObjects) {
+		for (uint32_t instanceIndex = 0, lightBufferOffset = 0; const auto & renderObject : m_scene->RenderObjects) {
 			for (const auto& model = renderObject.Model; const auto & meshNode : model.MeshNodes) {
-				for (UINT geometryIndex = 0; const auto & mesh : meshNode->Meshes) {
+				for (uint32_t geometryIndex = 0; const auto & mesh : meshNode->Meshes) {
 					if (IsEmissive(model, mesh->MaterialIndex)) {
 						_lightIndices[m_scene->GetInstanceData()[instanceIndex].FirstGeometryIndex + geometryIndex] = lightBufferOffset;
-						const auto triangleCount = static_cast<UINT>(mesh->Indices->GetCapacity()) / 3;
+						const auto triangleCount = static_cast<uint32_t>(mesh->Indices->GetCapacity()) / 3;
 						tasks.emplace_back(Task{
 							.InstanceIndex = instanceIndex,
 							.GeometryIndex = geometryIndex,
@@ -130,13 +130,13 @@ private:
 
 	const Scene* m_scene{};
 
-	UINT m_emissiveMeshCount{}, m_emissiveTriangleCount{};
+	uint32_t m_emissiveMeshCount{}, m_emissiveTriangleCount{};
 	RTXDI_LightBufferParameters m_lightBufferParameters{};
 
-	struct Task { UINT InstanceIndex, GeometryIndex, TriangleCount, LightBufferOffset; };
+	struct Task { uint32_t InstanceIndex, GeometryIndex, TriangleCount, LightBufferOffset; };
 	struct { unique_ptr<GPUBuffer> Tasks; } m_GPUBuffers;
 
-	static constexpr bool IsEmissive(const Model& model, UINT materialIndex) {
+	static constexpr bool IsEmissive(const Model& model, uint32_t materialIndex) {
 		constexpr auto Max = [](const XMFLOAT3& value) { return max(max(value.x, value.y), value.z); };
 		return materialIndex != ~0u && Max(model.Materials[materialIndex].EmissiveColor) > 0;
 	}
