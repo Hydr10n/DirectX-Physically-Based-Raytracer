@@ -6,8 +6,6 @@ module;
 
 #include "directxtk12/SimpleMath.h"
 
-#include "ml.h"
-
 #include "eventpp/callbacklist.h"
 
 export module Model;
@@ -19,6 +17,7 @@ import Texture;
 import Vertex;
 
 using namespace DirectX;
+using namespace DirectX::PackedVector;
 using namespace DirectX::SimpleMath;
 using namespace eventpp;
 using namespace std;
@@ -27,7 +26,7 @@ export {
 	struct Mesh {
 		using VertexType = VertexPositionNormalTangentTexture;
 		using SkeletalVertexType = VertexPositionNormalTangentSkin;
-		using MotionVectorType = float16_t4;
+		using MotionVectorType = XMHALF4;
 		shared_ptr<GPUBuffer> Vertices, Indices, SkeletalVertices, MotionVectors;
 
 		bool HasNormals{}, HasTangents{}, HasTextureCoordinates[2]{};

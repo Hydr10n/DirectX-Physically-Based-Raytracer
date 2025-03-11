@@ -142,6 +142,7 @@ namespace {
 	shared_ptr<Mesh> ProcessPrimitive(
 		const path& directoryPath,
 		const fastgltf::Asset& asset, const fastgltf::Primitive& primitive,
+		bool flipWindingOrder,
 		Model& model,
 		vector<LoadedTexture>& loadedTextures,
 		CommandList& commandList
@@ -175,7 +176,7 @@ namespace {
 				fastgltf::iterateAccessorWithIndex<T>(
 					asset, accessor,
 					[&](T value, size_t index) {
-						reinterpret_cast<T*>(data(indices))[index] = value;
+						reinterpret_cast<T*>(data(indices))[flipWindingOrder ? accessor.count - 1 - index : index] = value;
 					}
 				);
 			};
@@ -433,7 +434,12 @@ namespace {
 }
 
 export namespace GLTFHelpers {
-	void LoadModel(Model& model, const path& filePath, CommandList& commandList) {
+	void LoadModel(
+		Model& model,
+		const path& filePath,
+		CommandList& commandList,
+		bool flipWindingOrder = false
+	) {
 		if (empty(filePath)) {
 			throw invalid_argument("Model file path cannot be empty");
 		}
@@ -514,6 +520,7 @@ export namespace GLTFHelpers {
 							if (const auto _primitive = ProcessPrimitive(
 								directoryPath,
 								asset, primitive,
+								flipWindingOrder,
 								model,
 								loadedTextures,
 								commandList
